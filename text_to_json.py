@@ -15,19 +15,28 @@ Outputs:
 
 # Use #r directive for Rhino 8+ to import packages
 #r "nuget: OpenAI, 1.8.0"
+#r "nuget: DotNetEnv, 2.5.0"
 
 import rhinoscriptsyntax as rs
 import Rhino
 import json
 import ghpythonlib.components as ghcomp
 import System
+import os
 
 # Import OpenAI client for API access
 from openai import OpenAI
 
-# Your OpenRouter API key is directly embedded here for convenience
-# This eliminates the need for a separate .env file when using in Grasshopper
-OPENROUTER_API_KEY = "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"
+# Load environment variables from .env file
+import DotNetEnv
+script_dir = os.path.dirname(os.path.realpath(__file__))
+env_path = os.path.join(script_dir, ".env")
+DotNetEnv.Env.Load(env_path)
+
+# Get API key from environment variables
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY environment variable is not set")
 
 def process_with_llm(text_input):
     """Process the text input with OpenRouter API to generate a JSON floor plan description"""

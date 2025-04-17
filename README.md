@@ -47,6 +47,19 @@ This eliminates the need to manually install packages via pip. The script will a
 
 > **Note for Rhino 7 users:** If you're using Rhino 7, you'll need to modify the code to use traditional package imports with pip installations instead of the #r directive.
 
+## Environment Variables
+
+This project uses environment variables to store sensitive information such as API keys. To set up:
+
+1. Create a `.env` file in the root directory of the project
+2. Add your OpenRouter API key to the file in this format:
+   ```
+   OPENROUTER_API_KEY="your-api-key-here"
+   ```
+3. The application will automatically load this key when running
+
+**Note:** The `.env` file is included in `.gitignore` to prevent accidentally committing sensitive information to version control.
+
 ## Usage
 
 ### Creating the Grasshopper Definition
