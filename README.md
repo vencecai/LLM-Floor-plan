@@ -1,172 +1,353 @@
-# LLM Floor Plan Generator for Rhino & Grasshopper
+# LLM Floor Plan Generator
 
-This system enables the generation of floor plans from natural language descriptions using LLM (Large Language Model) technology integrated with Rhino and Grasshopper.
+  
+
+This system enables the generation of floor plans from natural language descriptions using LLM (Large Language Model) technology, offering interfaces for both Rhino/Grasshopper and a web-based frontend.
+
+  
 
 ## System Overview
 
-The floor plan generation process is broken down into three main steps:
+  
 
-1. **Text to JSON:** Interprets natural language descriptions to create a structured JSON representation of the floor plan.
-2. **JSON to Graph:** Converts the JSON structure into a graph representation with rooms, connections, walls, doors, and windows.
-3. **Graph to Floor Plan:** Generates the final floor plan geometry with walls, doors, and windows.
+The project provides two primary interfaces for generating floor plans:
 
-## Component Files
+  
 
-- `text_to_json.py`: First component that processes text input and generates JSON using an LLM
-- `json_to_graph.py`: Second component that converts JSON to a graph structure
-- `graph_to_floorplan.py`: Final component that generates the detailed floor plan
+1.  **Rhino/Grasshopper Interface:** Utilizes Python components within Grasshopper for users working directly in a CAD environment.
+
+2.  **Web-Based Frontend Interface:** A React application allowing users to draw initial boundaries and input text descriptions via a web browser.
+
+  
+
+Regardless of the interface used, the core floor plan generation process follows a hierarchical top-down approach:
+
+  
+
+1.  **Input Processing:** Gathers natural language descriptions and optional boundary information (either from Grasshopper inputs or the React frontend).
+
+2.  **Text to JSON:** Interprets inputs to create a structured JSON representation of the floor plan requirements.
+
+3.  **Hierarchical Space Partitioning:** Recursively divides space into a tree-like structure of rooms based on the JSON.
+
+4.  **Topological Graph Generation:** Creates a graph representation with rooms, connections, and spatial relationships.
+
+5.  **Physical Floor Plan Generation:** Generates the final floor plan geometry (either as Rhino geometry via Grasshopper or potentially visualized in the frontend/exported).
+
+  
+
+## Conceptual Approach (Core Logic)
+
+  
+
+Our system implements a "hierarchical space partitioning + topological graph generation" approach that follows a recursive top-down process:
+
+  
+
+### 1. Initial Boundary Definition
+
+- The system begins with a total boundary:
+
+    - **Grasshopper:** Defined via Rhino geometry or parameters.
+
+    - **React Frontend:** Drawn by the user using the tldraw canvas.
+
+    - **Fallback:** A default rectangular boundary (e.g., FloorPlan(width=20m, height=10m)).
+
+- This boundary informs the initial root node (id: "root") with geometric coordinates and dimensions in a JSON/DSL format.
+
+  
+
+### 2. Recursive Partitioning
+
+- The LLM decides how to partition the space (along X or Y axis) based on rules (binary partitioning, minimum room size, functional requirements from text input).
+
+- For each sub-rectangle, the system determines if termination conditions are met (minimum dimensions, room count, functional labels).
+
+- If not terminated, the partitioning continues recursively.
+
+- Each partition creates two new child nodes connected by an "adjacency edge."
+
+  
+
+### 3. Topological Graph Generation
+
+- The final result is a tree-like partitioning structure (each node with dimensions) and adjacency edges.
+
+- This is converted to a standard graph where:
+
+  - Nodes contain RoomType and center point coordinates.
+
+  - Edges contain attributes like "shared wall" or "doorway."
+
+- The system then calculates node centrality and extracts main circulation paths.
+
+  
+
+## Project Structure
+
+  
+
+```
+
+LLM-Floor-plan/
+
+├── frontend/                 # React Frontend Application
+
+│   ├── public/
+
+│   │   └── index.html
+
+│   ├── src/
+
+│   │   ├── components/       # Reusable React components
+
+│   │   │   ├── BoundaryCanvas.jsx # tldraw integration component
+
+│   │   │   └── TextInput.jsx      # Text input component
+
+│   │   ├── hooks/            # Custom React hooks (e.g., useBoundaryData)
+
+│   │   ├── services/         # API interaction logic (e.g., llmService.js)
+
+│   │   ├── styles/           # Tailwind CSS base/config
+
+│   │   ├── App.jsx           # Main application component
+
+│   │   └── index.js          # Entry point
+
+│   ├── package.json
+
+│   ├── tailwind.config.js
+
+│   └── README.md             # Frontend specific details
+
+├── grasshopper/              # Grasshopper components & related Python scripts
+
+│   ├── text_to_json.py
+
+│   ├── json_to_graph.py
+
+│   └── graph_to_floorplan.py
+
+├── backend/                  # Optional: If a dedicated backend server is needed for React app
+
+│   └── ...
+
+├── .env                      # Environment variables (shared or specific)
+
+├── .gitignore
+
+└── README.md                 # Main project README (this file)
+
+```
+
+  
+
+## Component Files & Interfaces
+
+  
+
+### 1. Rhino/Grasshopper Interface (`grasshopper/`)
+
+- `text_to_json.py`: Processes text input and generates JSON using an LLM.
+
+- `json_to_graph.py`: Converts JSON to a graph structure.
+
+- `graph_to_floorplan.py`: Generates the detailed floor plan geometry in Rhino.
+
+  
+
+### 2. React Frontend Interface (`frontend/`)
+
+- **Technology Stack:** React, tldraw SDK, Tailwind CSS.
+
+- **Functionality:**
+
+    - Provides a canvas (`BoundaryCanvas.jsx` using tldraw) for users to draw the initial site or building boundary.
+
+    - Includes a text area (`TextInput.jsx`) for natural language descriptions.
+
+    - Sends boundary data (e.g., coordinates of the polygon) and text description to the backend/LLM service.
+
+- **Interaction:** Likely communicates with a backend service (potentially Python-based, like Flask or FastAPI, running separately or integrated) that hosts the LLM logic.
+
+  
 
 ## Setup Instructions
 
+  
+
 ### Prerequisites
 
-- Rhino 8 or newer (recommended for #r directive support)
-- Grasshopper
-- Python for Rhino/Grasshopper
+  
+
+*   **For Grasshopper:**
+
+    *   Rhino 8 or newer
+
+    *   Grasshopper
+
+*   **For Frontend:**
+
+    *   Node.js and npm/yarn
+
+  
 
 ### Installation
 
-1. Create a new Grasshopper definition (.gh file)
-2. Add three Python Script components to your canvas
-3. Copy the code from each Python file into its respective component
-4. Connect the components according to the data flow described below
+  
+
+*   **Grasshopper:**
+
+    1.  Navigate to the `grasshopper/` directory.
+
+    2.  Follow the setup instructions within that directory's README (or adapt the instructions below).
+
+*   **Frontend:**
+
+    1.  Navigate to the `frontend/` directory.
+
+    2.  Run `npm install` (or `yarn install`).
+
+  
 
 ### API Configuration
 
-The OpenRouter API key is directly embedded in the `text_to_json.py` component, making it easier to copy and paste into Grasshopper without needing a separate .env file. The component is configured to use Anthropic's Claude 3.7 Sonnet model through OpenRouter.
+  
 
-### Package Dependencies
+The OpenRouter API key needs to be configured. This might be handled differently for each interface:
 
-The system uses Rhino 8's `#r` directive to automatically load the required NuGet packages:
+*   **Grasshopper:** Currently embedded in `text_to_json.py` or via a `.env` file loaded by Python.
+
+*   **Frontend:** Likely requires a backend service to securely handle the API key. The frontend should **not** store the API key directly. Configuration via a `.env` file in the `backend/` or main project directory, accessed by the server.
+
+  
+
+### Package Dependencies (Grasshopper)
+
+  
+
+The Grasshopper Python components use Rhino 8's `#r` directive:
 
 ```python
+
 #r "nuget: OpenAI, 1.8.0"
+
 ```
 
-This eliminates the need to manually install packages via pip. The script will automatically download and reference the OpenAI package directly from NuGet.
+> **Note for Rhino 7 users:** Modify the code to use traditional pip installations.
 
-> **Note for Rhino 7 users:** If you're using Rhino 7, you'll need to modify the code to use traditional package imports with pip installations instead of the #r directive.
+  
 
 ## Environment Variables
 
-This project uses environment variables to store sensitive information such as API keys. To set up:
+  
 
-1. Create a `.env` file in the root directory of the project
-2. Add your OpenRouter API key to the file in this format:
-   ```
-   OPENROUTER_API_KEY="your-api-key-here"
-   ```
-3. The application will automatically load this key when running
+Create a `.env` file in the root directory (or relevant sub-directory like `backend/`) for sensitive information:
 
-**Note:** The `.env` file is included in `.gitignore` to prevent accidentally committing sensitive information to version control.
+```
+
+OPENROUTER_API_KEY="your-api-key-here"
+
+# Add other variables if needed (e.g., backend server port)
+
+```
+
+Ensure `.env` is in `.gitignore`.
+
+  
 
 ## Usage
 
-### Creating the Grasshopper Definition
+  
 
-Create three Python Script components in Grasshopper and set them up as follows:
+### 1. Grasshopper Interface
 
-1. **Text to JSON Component**
+  
 
-   - Inputs:
-     - `text_input`: String (natural language description)
-     - `run`: Boolean toggle
-   - Outputs:
-     - `json_output`: String (JSON representation)
-     - `success`: Boolean
-     - `message`: String (status or error message)
+*   Create three Python Script components in Grasshopper.
 
-2. **JSON to Graph Component**
+*   Load the code from the `.py` files in the `grasshopper/` directory.
 
-   - Inputs:
-     - `json_input`: String (from previous component)
-     - `run`: Boolean toggle
-   - Outputs:
-     - `room_centers`: Points (intelligently calculated based on wall positions)
-     - `room_names`: Text
-     - `room_types`: Text
-     - `connection_lines`: Lines
-     - `wall_lines`: Lines
-     - `door_positions`: Points
-     - `window_positions`: Points
-     - `success`: Boolean
-     - `message`: String
+*   Connect inputs/outputs as previously described (Text Input -> JSON -> Graph -> Floor Plan Geometry).
 
-3. **Graph to Floor Plan Component**
-   - Inputs:
-     - `room_centers`: Points (from previous component)
-     - `room_names`: Text
-     - `room_types`: Text
-     - `connection_lines`: Lines
-     - `wall_lines`: Lines
-     - `door_positions`: Points
-     - `window_positions`: Points
-     - `wall_thickness`: Number (default: 0.2)
-     - `door_width`: Number (default: 0.9)
-     - `window_width`: Number (default: 1.2)
-     - `run`: Boolean toggle
-   - Outputs:
-     - `wall_geometry`: Breps
-     - `door_geometry`: Breps
-     - `window_geometry`: Breps
-     - `room_boundary_curves`: Curves
-     - `room_outlines`: Breps (filled surfaces representing room boundaries)
-     - `room_labels`: Text
-     - `success`: Boolean
-     - `message`: String
+  
 
-### Example Input
+### 2. React Frontend Interface
 
-Here's an example of a natural language description you could use:
+  
 
-```
-Design a modern two-bedroom apartment with an open kitchen and living area.
-Include a master bedroom with en-suite bathroom, a second smaller bedroom,
-and a shared bathroom. The apartment should have large windows in the living
-area and a balcony accessible from the living room.
-```
+1.  Navigate to the `frontend/` directory.
 
-### Room Positioning
+2.  Run `npm start` (or `yarn start`).
 
-The system uses a sophisticated approach to determine room positioning:
+3.  Open the provided URL in your browser.
 
-1. Room centers are calculated based on the average position of wall endpoints and midpoints associated with each room
-2. If wall data is not available, it uses explicit position and dimension data if present in the JSON
-3. As a last resort, it falls back to a grid pattern for room placement
+4.  Use the canvas to draw the desired boundary.
 
-This ensures rooms are positioned accurately within their physical boundaries, resulting in more realistic floor plans.
+5.  Enter the floor plan description in the text area.
 
-### Tips for Best Results
+6.  Click the "Generate" button to send the data for processing.
 
-1. Be specific in your descriptions about room types, adjacencies, and special features
-2. Include information about doors and windows where possible
-3. Specify approximate sizes or proportions if important
-4. Mention any specific requirements for room layouts or connections
+  
 
 ## Customization
 
+  
+
 You can customize various aspects of the generated floor plans:
 
+  
+
 - Edit the `get_room_size_by_type` function to change default room sizes
+
 - Modify the wall height in the `create_wall_geometry` function
+
 - Adjust door and window parameters in their respective functions
+
 - Enhance the system prompt in the LLM call to specify additional requirements
+
 - If needed, replace the API key in the `text_to_json.py` file with your own
+
+*(Consider adding frontend customization points)*
+
+  
 
 ## Troubleshooting
 
-- If the API call fails, verify that the embedded API key is correct
-- If the geometry generation fails, review the generated JSON to ensure it's properly structured
-- Check the `message` output from each component for specific error information
-- If you encounter NuGet package loading issues, verify you're using Rhino 8 or later for the #r directive
+  
+
+- If the API call fails, verify that the embedded API key is correct (or properly configured in the backend for the frontend).
+
+- If the geometry generation fails, review the generated JSON to ensure it's properly structured.
+
+- Check the `message` output from each component for specific error information.
+
+- If you encounter NuGet package loading issues, verify you're using Rhino 8 or later for the #r directive.
+
+*(Consider adding frontend troubleshooting points, e.g., checking browser console, network requests)*
+
+  
 
 ## License
 
+  
+
 This project is provided as open-source software. Feel free to modify and extend it for your own projects.
+
+  
 
 ## Acknowledgments
 
+  
+
 - Built using Rhino and Grasshopper
+
 - Uses OpenRouter to access Anthropic's Claude 3.7 Sonnet for natural language processing
+
 - Utilizes Rhino's geometry libraries for floor plan generation
+
 - Takes advantage of Rhino 8's #r directive for seamless package management
+
+- Frontend utilizes React, tldraw, and Tailwind CSS.
