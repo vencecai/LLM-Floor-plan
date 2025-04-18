@@ -67,4 +67,50 @@ venv.bak/
 *.3dm
 
 # Mac OS
-.DS_Store 
+.DS_Store
+
+# Node.js / React / Frontend
+node_modules/
+/frontend/node_modules/
+/frontend/build/
+/frontend/dist/
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.vs/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs
+*.log
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Large files / databases
+*.sqlite
+*.db
+*.sql
+*.csv
+*.xlsx
+*.xls
+
+# Temporary files
+tmp/
+temp/ 

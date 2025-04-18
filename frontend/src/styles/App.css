@@ -1,0 +1,158 @@
+/* App container */
+.app-container {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Header styles */
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+header h1 {
+  margin-bottom: 0.5rem;
+  color: #2d3748;
+}
+
+header p {
+  color: #718096;
+  font-size: 1.1rem;
+}
+
+/* Main content layout */
+main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  main {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .result-section {
+    grid-column: span 2;
+  }
+}
+
+/* Section styles */
+.canvas-section,
+.input-section,
+.result-section {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.canvas-section h2,
+.input-section h2,
+.result-section h2 {
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Canvas styles */
+.boundary-canvas {
+  height: 500px;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+/* Text input styles */
+.text-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.description-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.25rem;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.description-textarea:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+
+.example-prompts {
+  background-color: #f7fafc;
+  padding: 1rem;
+  border-radius: 0.25rem;
+}
+
+.example-prompts h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.example-prompts ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.example-prompts li {
+  padding: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.example-prompts li:hover {
+  background-color: #edf2f7;
+}
+
+/* Button styles */
+.generate-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #4299e1;
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 1rem;
+}
+
+.generate-button:hover {
+  background-color: #3182ce;
+}
+
+.generate-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.4);
+}
+
+.generate-button.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Result section styles */
+.result-section pre {
+  background-color: #f7fafc;
+  padding: 1rem;
+  border-radius: 0.25rem;
+  overflow: auto;
+  max-height: 400px;
+} 
