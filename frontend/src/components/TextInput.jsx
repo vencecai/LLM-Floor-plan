@@ -1,6 +1,6 @@
 import React from 'react';
 
-function TextInput({ value, onChange, onGenerate, isLoading }) {
+function TextInput({ value, onChange, onGenerate, isLoading, hasResults }) {
   const handleChange = (e) => {
     onChange(e.target.value);
   };
@@ -12,33 +12,37 @@ function TextInput({ value, onChange, onGenerate, isLoading }) {
   ];
 
   return (
-    <div className="text-input-container">
-      <textarea
-        className="description-textarea"
-        placeholder="Describe your floor plan requirements..."
-        value={value}
-        onChange={handleChange}
-        rows={6}
-      />
+    <div className={`text-input-container ${hasResults ? 'with-results' : ''}`}>
+      {!hasResults && (
+        <div className="example-prompts">
+          <h3>Example prompts:</h3>
+          <ul>
+            {examplePrompts.map((prompt, index) => (
+              <li key={index} onClick={() => onChange(prompt)}>
+                {prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       
-      <div className="example-prompts">
-        <h3>Example prompts:</h3>
-        <ul>
-          {examplePrompts.map((prompt, index) => (
-            <li key={index} onClick={() => onChange(prompt)}>
-              {prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt}
-            </li>
-          ))}
-        </ul>
+      <div className="input-area">
+        <textarea
+          className="description-textarea"
+          placeholder="Describe your floor plan requirements..."
+          value={value}
+          onChange={handleChange}
+          rows={hasResults ? 3 : 6}
+        />
+        
+        <button 
+          className={`generate-button ${isLoading ? 'loading' : ''}`}
+          onClick={onGenerate}
+          disabled={isLoading}
+        >
+          {isLoading ? 'Generating...' : 'Generate Floor Plan'}
+        </button>
       </div>
-      
-      <button 
-        className={`generate-button ${isLoading ? 'loading' : ''}`}
-        onClick={onGenerate}
-        disabled={isLoading}
-      >
-        {isLoading ? 'Generating...' : 'Generate Floor Plan'}
-      </button>
     </div>
   );
 }

@@ -11,6 +11,11 @@ function App() {
   const [generatedFloorPlan, setGeneratedFloorPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // API基础URL
+  const apiBaseUrl = process.env.NODE_ENV === 'production' 
+    ? window.location.origin
+    : 'http://localhost:5000';
 
   // Handle boundary data changes safely
   const handleBoundaryChange = useCallback((data) => {
@@ -104,6 +109,72 @@ function App() {
     setError(null);
   }, []);
 
+  /**
+   * Generates a floor plan by sending data to the API
+   * @param {string} promptText - Description of the floor plan
+   * @param {Array} boundaries - Boundary data for the floor plan
+   * @param {Object} preferences - Optional preferences for generation
+   * @returns {Promise<Object>} - The generated floor plan data
+   */
+  const generateFloorPlan = async (promptText, boundaries, preferences = {}) => {
+    // Log the request details for debugging
+    console.log("Generating floor plan with:", {
+      description: promptText,
+      boundaries: boundaries,
+      preferences: preferences
+    });
+    
+    try {
+      // Build API request URL
+      const apiUrl = `${apiBaseUrl}/api/generate-floor-plan`;
+      console.log(`Sending request to: ${apiUrl}`);
+      
+      // Prepare request data
+      const requestData = {
+        boundary_data: boundaries,
+        description: promptText,
+        preferences: preferences
+      };
+      
+      console.log("Sending request with data:", requestData);
+      
+      // Send API request
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      // Check response status
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+      
+      // Parse successful response
+      const responseData = await response.json();
+      console.log("Received response:", responseData);
+      
+      return {
+        success: true,
+        message: responseData.message,
+        data: {
+          floor_plan: JSON.parse(responseData.floor_plan),
+          boundary: responseData.boundary_data,
+          description: responseData.description
+        }
+      };
+    } catch (error) {
+      console.error('Error in floor plan generation:', error);
+      return {
+        success: false,
+        error: error.message || 'Unknown error during floor plan generation'
+      };
+    }
+  };
+
   const handleGenerate = async () => {
     console.log("Generate button clicked");
     console.log("Current boundary data:", boundaryData);
@@ -134,31 +205,21 @@ function App() {
     setError(null);
     
     try {
-      // In a real application, this would be a call to your backend
-      // For now, we'll just simulate a response
-      console.log('Preparing to send data to backend:', { 
-        boundaryData, 
-        description,
-        boundaryCount: boundaryData.length,
-        firstBoundaryType: boundaryData[0]?.type
+      // Call the generateFloorPlan function
+      const result = await generateFloorPlan(description, boundaryData, {});
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      setGeneratedFloorPlan({
+        message: result.message,
+        data: result.data
       });
-      
-      // Simulate API call delay
-      console.log("Simulating API call with 2 second delay");
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const floorPlanResponse = {
-        message: 'Floor plan generated successfully!',
-        // This would be actual floor plan data from the backend
-        data: { boundary: boundaryData, description }
-      };
-      
-      console.log("Generated floor plan response:", floorPlanResponse);
-      setGeneratedFloorPlan(floorPlanResponse);
     } catch (error) {
       console.error('Error generating floor plan:', error);
-      setError('Error generating floor plan. Please try again.');
-      alert('Error generating floor plan. Please try again.');
+      setError(error.message || 'Error generating floor plan. Please try again.');
+      alert(error.message || 'Error generating floor plan. Please try again.');
     } finally {
       console.log("Generation process complete");
       setIsLoading(false);
@@ -191,13 +252,14 @@ function App() {
           <BoundaryCanvas onBoundaryChange={handleBoundaryChange} />
         </div>
 
-        <div className="chat-section">
+        <div className="floating-chat-section">
           <h2>Describe Your Floor Plan</h2>
           <TextInput 
             value={description} 
             onChange={setDescription} 
             onGenerate={handleGenerate}
             isLoading={isLoading}
+            hasResults={generatedFloorPlan !== null}
           />
           
           {generatedFloorPlan && (
