@@ -181,13 +181,14 @@ def generate_floor_plan(boundary_data, description, preferences=None):
             
             # 构建请求体
             payload = {
-                "model": "anthropic/claude-3.7-sonnet",
+                "model": "anthropic/claude-3-sonnet-20240229",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": 0.2,
-                "max_tokens": 4000  # 增加token数量以确保生成完整的JSON
+                "max_tokens": 4000,  # 增加token数量以确保生成完整的JSON
+                "stream": False  # 默认非流式响应
             }
             
             # 发送请求
@@ -241,4 +242,187 @@ def generate_floor_plan(boundary_data, description, preferences=None):
         error_detail = traceback.format_exc()
         logger.error(f"生成平面图时发生错误: {str(e)}\n{error_detail}")
         error_message = f"Error generating floor plan: {str(e)}"
-        return None, False, error_message 
+        return None, False, error_message
+
+
+def generate_floor_plan_stream(boundary_data, description, preferences=None):
+    """
+    使用流式响应生成平面图
+    
+    参数:
+    - boundary_data: 边界形状数据数组
+    - description: 平面图文本描述
+    - preferences: 可选的偏好设置
+    
+    返回:
+    - 生成器对象，可迭代获取每个响应片段
+    """
+    if not description:
+        yield json.dumps({"error": "Missing text description"})
+        return
+    
+    if not boundary_data or len(boundary_data) == 0:
+        yield json.dumps({"error": "Missing boundary data"})
+        return
+    
+    try:
+        # 检查API密钥，可能在初始化时未获取到
+        api_key = get_api_key()
+        if not api_key:
+            yield json.dumps({"error": "无法获取API密钥，请检查.env文件或环境变量"})
+            return
+        
+        # 处理边界数据
+        processed_boundary = process_boundary_data(boundary_data)
+        logger.info(f"处理后的边界数据: 总面积={processed_boundary['total_area']}平方米, 形状数量={processed_boundary['shapes_count']}")
+        
+        # 构建系统提示
+        system_prompt = """
+        You are a floor plan design assistant. Convert the user's text description into a structured JSON 
+        representation of a floor plan. The JSON should include:
+        
+        1. rooms: Array of room objects with:
+           - id: unique identifier
+           - name: room name
+           - type: room type (bedroom, bathroom, kitchen, etc.)
+           - area: approximate area in square meters
+           - adjacent_rooms: array of room IDs that this room connects to
+        
+        2. walls: Array of wall objects with:
+           - id: unique identifier
+           - start_point: [x, y] coordinates 
+           - end_point: [x, y] coordinates
+           - room_ids: array of room IDs this wall belongs to
+        
+        3. openings: Array of door/window objects with:
+           - id: unique identifier
+           - type: "door" or "window"
+           - wall_id: ID of the wall this opening belongs to
+           - position: relative position along the wall (0.0 to 1.0)
+           - width: width of the opening in meters
+        
+        Format the JSON precisely and ensure it's valid.
+        """
+        
+        # 构建用户提示，包含边界信息和描述
+        user_prompt = f"""
+        Please create a floor plan based on the following description and boundary constraints:
+        
+        Description: {description}
+        
+        Boundary Information:
+        - Total area: {processed_boundary['total_area']} square meters
+        - Number of shapes: {processed_boundary['shapes_count']}
+        - Shape details: {json.dumps(processed_boundary['shapes'], indent=2)}
+        
+        Additional preferences: {json.dumps(preferences, indent=2) if preferences else 'None'}
+        
+        Please ensure the floor plan fits within the given boundaries and addresses all requirements in the description.
+        """
+        
+        # 发送API请求
+        logger.info("使用流式请求发送API请求至OpenRouter")
+        
+        # 构建请求头
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://floorplan-generator.com",
+            "X-Title": "LLM Floor Plan Generator"
+        }
+        
+        # 构建请求体
+        payload = {
+            "model": "anthropic/claude-3-sonnet-20240229",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.2,
+            "max_tokens": 4000,  # 增加token数量以确保生成完整的JSON
+            "stream": True  # 流式响应
+        }
+        
+        # 发送流式请求
+        with requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60,  # 设置60秒超时
+            stream=True  # 启用流式传输
+        ) as response:
+            # 检查响应状态
+            if response.status_code != 200:
+                error_msg = f"API请求失败，状态码: {response.status_code}, 响应: {response.text}"
+                logger.error(error_msg)
+                yield json.dumps({"error": error_msg})
+                return
+            
+            # 处理流式响应
+            accumulated_text = ""
+            for line in response.iter_lines():
+                if line:
+                    # 移除SSE前缀 "data: "
+                    line_text = line.decode('utf-8')
+                    if line_text.startswith("data: "):
+                        line_data = line_text[6:]  # 去除 "data: " 前缀
+                        
+                        # 处理结束标志
+                        if line_data == "[DONE]":
+                            break
+                            
+                        try:
+                            json_data = json.loads(line_data)
+                            chunk = json_data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if chunk:
+                                accumulated_text += chunk
+                                # 发送增量更新
+                                yield json.dumps({
+                                    "type": "chunk", 
+                                    "content": chunk,
+                                    "accumulated": accumulated_text
+                                })
+                        except json.JSONDecodeError:
+                            logger.error(f"解析流式响应行失败: {line_data}")
+                        except Exception as e:
+                            logger.error(f"处理流式响应行时出错: {str(e)}")
+            
+            # 处理完整响应
+            logger.info("流式响应接收完成，解析JSON")
+            
+            # 提取JSON内容
+            if "```json" in accumulated_text and "```" in accumulated_text:
+                json_content = accumulated_text.split("```json")[1].split("```")[0].strip()
+                logger.info("从```json```块中提取JSON内容")
+            elif "```" in accumulated_text:
+                json_content = accumulated_text.split("```")[1].split("```")[0].strip()
+                logger.info("从```块中提取JSON内容")
+            else:
+                json_content = accumulated_text
+                logger.info("使用完整响应作为JSON内容")
+                
+            # 验证JSON
+            try:
+                json_obj = json.loads(json_content)
+                formatted_json = json.dumps(json_obj, indent=2)
+                logger.info("JSON验证成功")
+                
+                # 发送最终结果
+                yield json.dumps({
+                    "type": "final",
+                    "message": "Successfully generated floor plan",
+                    "floor_plan": formatted_json
+                })
+            except json.JSONDecodeError as json_error:
+                logger.error(f"JSON解析失败: {str(json_error)}")
+                logger.error(f"收到的内容: {accumulated_text[:500]}...")
+                yield json.dumps({
+                    "type": "error",
+                    "error": f"无法解析模型生成的JSON: {str(json_error)}"
+                })
+    
+    except Exception as e:
+        error_detail = traceback.format_exc()
+        logger.error(f"生成平面图时发生错误: {str(e)}\n{error_detail}")
+        error_message = f"Error generating floor plan: {str(e)}"
+        yield json.dumps({"error": error_message}) 

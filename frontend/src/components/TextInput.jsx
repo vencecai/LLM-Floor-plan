@@ -32,7 +32,7 @@ function TextInput({ value, onChange, onGenerate, isLoading, hasResults }) {
           placeholder="Describe your floor plan requirements..."
           value={value}
           onChange={handleChange}
-          rows={hasResults ? 3 : 6}
+          rows={hasResults ? 3 : 4}
         />
         
         <button 

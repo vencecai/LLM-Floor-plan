@@ -11,6 +11,8 @@ function App() {
   const [generatedFloorPlan, setGeneratedFloorPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
   
   // API基础URL
   const apiBaseUrl = process.env.NODE_ENV === 'production' 
@@ -110,35 +112,32 @@ function App() {
   }, []);
 
   /**
-   * Generates a floor plan by sending data to the API
-   * @param {string} promptText - Description of the floor plan
-   * @param {Array} boundaries - Boundary data for the floor plan
-   * @param {Object} preferences - Optional preferences for generation
-   * @returns {Promise<Object>} - The generated floor plan data
+   * 使用流式API生成平面图
+   * @param {string} promptText - 描述文本
+   * @param {Array} boundaries - 边界数据
+   * @param {Object} preferences - 可选参数
    */
-  const generateFloorPlan = async (promptText, boundaries, preferences = {}) => {
-    // Log the request details for debugging
-    console.log("Generating floor plan with:", {
-      description: promptText,
-      boundaries: boundaries,
-      preferences: preferences
-    });
+  const generateFloorPlanStream = async (promptText, boundaries, preferences = {}) => {
+    // 重置流文本
+    setStreamingText("");
+    setIsStreaming(true);
     
     try {
-      // Build API request URL
-      const apiUrl = `${apiBaseUrl}/api/generate-floor-plan`;
-      console.log(`Sending request to: ${apiUrl}`);
+      // 构建API请求URL
+      const apiUrl = `${apiBaseUrl}/api/generate-floor-plan-stream`;
+      console.log(`发送流式请求到: ${apiUrl}`);
       
-      // Prepare request data
+      // 准备请求数据
       const requestData = {
         boundary_data: boundaries,
         description: promptText,
         preferences: preferences
       };
       
-      console.log("Sending request with data:", requestData);
+      // 创建事件源
+      const eventSource = new EventSource(`${apiUrl}?data=${encodeURIComponent(JSON.stringify(requestData))}`);
       
-      // Send API request
+      // 使用fetch发送POST请求并获取流式响应
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -147,31 +146,72 @@ function App() {
         body: JSON.stringify(requestData),
       });
       
-      // Check response status
+      // 检查HTTP状态
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+        throw new Error(`Server error: ${response.status}`);
       }
       
-      // Parse successful response
-      const responseData = await response.json();
-      console.log("Received response:", responseData);
+      // 获取响应的可读流
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
       
-      return {
-        success: true,
-        message: responseData.message,
-        data: {
-          floor_plan: JSON.parse(responseData.floor_plan),
-          boundary: responseData.boundary_data,
-          description: responseData.description
+      // 处理流数据
+      let done = false;
+      let accumulatedData = "";
+      
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        
+        if (done) break;
+        
+        // 解码二进制数据为文本
+        const textChunk = decoder.decode(value);
+        accumulatedData += textChunk;
+        
+        // 处理SSE格式数据
+        const events = accumulatedData.split("\n\n");
+        accumulatedData = events.pop() || ""; // 最后一个可能不完整
+        
+        for (const event of events) {
+          if (event.startsWith("data: ")) {
+            const jsonData = event.substring(6); // 移除 "data: " 前缀
+            try {
+              const data = JSON.parse(jsonData);
+              
+              // 根据数据类型处理
+              if (data.type === "chunk") {
+                // 更新流式文本
+                setStreamingText(prev => prev + data.content);
+              } else if (data.type === "final") {
+                // 流式响应完成，设置最终结果
+                setStreamingText("");
+                setGeneratedFloorPlan({
+                  message: data.message,
+                  data: {
+                    floor_plan: JSON.parse(data.floor_plan),
+                    boundary: boundaries,
+                    description: promptText
+                  }
+                });
+                setIsStreaming(false);
+              } else if (data.type === "error") {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              console.error("解析事件数据失败:", e, jsonData);
+            }
+          }
         }
-      };
+      }
+      
+      return { success: true };
     } catch (error) {
-      console.error('Error in floor plan generation:', error);
-      return {
-        success: false,
-        error: error.message || 'Unknown error during floor plan generation'
-      };
+      console.error('流式生成过程中出错:', error);
+      setStreamingText("");
+      setIsStreaming(false);
+      setError(error.message || '流式生成过程中发生错误');
+      return { success: false, error: error.message };
     }
   };
 
@@ -205,17 +245,14 @@ function App() {
     setError(null);
     
     try {
-      // Call the generateFloorPlan function
-      const result = await generateFloorPlan(description, boundaryData, {});
+      // 使用流式生成代替普通生成
+      const result = await generateFloorPlanStream(description, boundaryData, {});
       
       if (!result.success) {
         throw new Error(result.error);
       }
       
-      setGeneratedFloorPlan({
-        message: result.message,
-        data: result.data
-      });
+      // 注意：流式生成结果会由流处理函数设置到状态中
     } catch (error) {
       console.error('Error generating floor plan:', error);
       setError(error.message || 'Error generating floor plan. Please try again.');
@@ -254,20 +291,34 @@ function App() {
 
         <div className="floating-chat-section">
           <h2>Describe Your Floor Plan</h2>
-          <TextInput 
-            value={description} 
-            onChange={setDescription} 
-            onGenerate={handleGenerate}
-            isLoading={isLoading}
-            hasResults={generatedFloorPlan !== null}
-          />
           
-          {generatedFloorPlan && (
+          {/* 生成的结果显示在上方 */}
+          {isStreaming && (
+            <div className="stream-section">
+              <div className="stream-content">
+                {streamingText}
+                <span className="cursor"></span>
+              </div>
+            </div>
+          )}
+          
+          {generatedFloorPlan && !isStreaming && (
             <div className="result-section">
               <h2>Generated Floor Plan</h2>
               <pre>{JSON.stringify(generatedFloorPlan, null, 2)}</pre>
             </div>
           )}
+          
+          {/* 输入控件固定在底部 */}
+          <div className="input-container">
+            <TextInput 
+              value={description} 
+              onChange={setDescription} 
+              onGenerate={handleGenerate}
+              isLoading={isLoading || isStreaming}
+              hasResults={generatedFloorPlan !== null || isStreaming}
+            />
+          </div>
         </div>
       </main>
       
