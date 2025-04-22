@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import BoundaryCanvas from './components/BoundaryCanvas';
 import TextInput from './components/TextInput';
 import BoundaryInfo from './components/BoundaryInfo';
 import DebugPanel from './components/DebugPanel';
+import RoomVisualizer from './components/RoomVisualizer';
+import RoomStyler from './components/RoomStyler';
 import './styles/App.css';
+import { extractAllRooms } from './utils/floorPlanUtils';
 
 function App() {
   const [boundaryData, setBoundaryData] = useState(null);
@@ -13,6 +16,13 @@ function App() {
   const [error, setError] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const editorRef = useRef(null);
+  
+  // Add state for room colors
+  const [roomColors, setRoomColors] = useState({});
+  
+  // 添加状态存储提取后的房间数据
+  const [extractedRooms, setExtractedRooms] = useState([]);
   
   // API基础URL
   const apiBaseUrl = process.env.NODE_ENV === 'production' 
@@ -125,7 +135,7 @@ function App() {
     try {
       // 构建API请求URL
       const apiUrl = `${apiBaseUrl}/api/generate-floor-plan-stream`;
-      console.log(`发送流式请求到: ${apiUrl}`);
+      console.log(`Sending stream request to: ${apiUrl}`);
       
       // 准备请求数据
       const requestData = {
@@ -199,7 +209,7 @@ function App() {
                 throw new Error(data.error);
               }
             } catch (e) {
-              console.error("解析事件数据失败:", e, jsonData);
+              console.error("Parsing event data failed:", e, jsonData);
             }
           }
         }
@@ -207,10 +217,10 @@ function App() {
       
       return { success: true };
     } catch (error) {
-      console.error('流式生成过程中出错:', error);
+      console.error('Stream generation failed:', error);
       setStreamingText("");
       setIsStreaming(false);
-      setError(error.message || '流式生成过程中发生错误');
+      setError(error.message || 'Stream generation failed');
       return { success: false, error: error.message };
     }
   };
@@ -263,6 +273,64 @@ function App() {
     }
   };
 
+  // 保存编辑器实例引用
+  useEffect(() => {
+    if (window.editor) {
+      editorRef.current = window.editor;
+    }
+  }, [generatedFloorPlan]);
+
+  // Handle room color changes
+  const handleRoomColorChange = useCallback((colors) => {
+    setRoomColors(colors);
+  }, []);
+
+  // 在 floorPlan 生成后处理房间数据
+  useEffect(() => {
+    if (generatedFloorPlan && boundaryData) {
+      try {
+        console.log("Extracting room data for styling");
+        
+        // 检查是否有 JSON 结果
+        let jsonData = null;
+        if (generatedFloorPlan.data?.floor_plan?.json_result) {
+          // 如果 json_result 是字符串，尝试解析它
+          if (typeof generatedFloorPlan.data.floor_plan.json_result === 'string') {
+            try {
+              jsonData = JSON.parse(generatedFloorPlan.data.floor_plan.json_result);
+              console.log("Parsed JSON data:", jsonData);
+            } catch (e) {
+              console.error("Failed to parse JSON string:", e);
+              // 使用原始字符串
+              jsonData = generatedFloorPlan.data.floor_plan.json_result;
+            }
+          } else {
+            // 如果已经是对象，直接使用
+            jsonData = generatedFloorPlan.data.floor_plan.json_result;
+          }
+        }
+        
+        // 使用解析后的 JSON 数据或原始 floorPlanData
+        const rooms = extractAllRooms(jsonData || generatedFloorPlan, boundaryData);
+        console.log("Extracted room data:", rooms);
+        setExtractedRooms(rooms);
+        
+        // 初始化房间颜色
+        if (rooms.length > 0 && Object.keys(roomColors).length === 0) {
+          const initialColors = {};
+          // 为每个唯一的房间类型设置默认颜色
+          const uniqueTypes = [...new Set(rooms.map(r => r.type))];
+          uniqueTypes.forEach(type => {
+            initialColors[type] = 'white'; // 默认白色
+          });
+          setRoomColors(initialColors);
+        }
+      } catch (error) {
+        console.error("Error extracting room data:", error);
+      }
+    }
+  }, [generatedFloorPlan, boundaryData]);
+
   return (
     <div className="app-fullscreen">
       <header>
@@ -287,10 +355,28 @@ function App() {
       <main className="main-container">
         <div className="drawing-section">
           <BoundaryCanvas onBoundaryChange={handleBoundaryChange} />
+          
+          {/* 添加房间可视化组件 */}
+          {generatedFloorPlan && editorRef.current && (
+            <RoomVisualizer 
+              floorPlanData={generatedFloorPlan} 
+              editor={editorRef.current} 
+              boundaryData={boundaryData}
+              roomColors={roomColors}
+            />
+          )}
         </div>
 
         <div className="floating-chat-section">
           <h2>Describe Your Floor Plan</h2>
+          
+          {/* Room Styler Component when floor plan is generated */}
+          {generatedFloorPlan && !isStreaming && extractedRooms.length > 0 && (
+            <RoomStyler 
+              floorPlanData={{ rooms: extractedRooms }} 
+              onColorChange={handleRoomColorChange}
+            />
+          )}
           
           {/* 生成的结果显示在上方 */}
           {isStreaming && (
@@ -342,7 +428,10 @@ function App() {
       </main>
       
       {/* Debug panel for development */}
-      <DebugPanel boundaryData={boundaryData} />
+      <DebugPanel 
+        boundaryData={boundaryData} 
+        floorPlanData={generatedFloorPlan} 
+      />
     </div>
   );
 }
