@@ -305,7 +305,26 @@ function App() {
           {generatedFloorPlan && !isStreaming && (
             <div className="result-section">
               <h2>Generated Floor Plan</h2>
-              <pre>{JSON.stringify(generatedFloorPlan, null, 2)}</pre>
+              <div className="result-tabs">
+                <div className="result-content">
+                  <div className="result-info">
+                    <p><strong>Description:</strong> {generatedFloorPlan.data.description}</p>
+                    <p><strong>Boundary Data:</strong> {generatedFloorPlan.data.boundary.length} shape(s)</p>
+                  </div>
+                  
+                  <div className="result-json">
+                    <h3>Floor Plan Structure</h3>
+                    <div className="json-section">
+                      <pre>{JSON.stringify(generatedFloorPlan.data.floor_plan.json_result, null, 2)}</pre>
+                    </div>
+                    
+                    <h3>Thinking Process</h3>
+                    <div className="thinking-section">
+                      <pre className="thinking-content">{generatedFloorPlan.data.floor_plan.thinking_steps}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           

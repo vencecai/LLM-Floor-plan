@@ -332,6 +332,15 @@ header h1 {
   border-bottom: none;
 }
 
+.result-section h3 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.5rem 0;
+  padding: 0;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.25rem;
+}
+
 .result-section pre {
   font-size: 0.85rem;
   white-space: pre-wrap;
@@ -342,6 +351,61 @@ header h1 {
   border: 1px solid #edf2f7;
   margin: 0;
   overflow-x: auto;
+}
+
+/* 结果区域的Tab样式 */
+.result-tabs {
+  background-color: #fff;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #edf2f7;
+}
+
+.result-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-info {
+  padding: 0.75rem;
+  background-color: #f7fafc;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.result-info p {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  color: #4a5568;
+}
+
+.result-info strong {
+  color: #2d3748;
+}
+
+.result-json {
+  padding: 0 0.75rem 0.75rem 0.75rem;
+}
+
+.json-section {
+  margin-bottom: 1rem;
+}
+
+.json-section pre {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.thinking-section {
+  margin-top: 0.5rem;
+}
+
+.thinking-content {
+  font-size: 0.8rem !important;
+  line-height: 1.4;
+  max-height: 250px;
+  overflow-y: auto;
+  background-color: #f7fafc !important;
+  color: #4a5568;
 }
 
 /* 流式响应样式 */
