@@ -1,40 +1,37 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import BoundaryCanvas from './components/BoundaryCanvas';
-import TextInput from './components/TextInput';
-import BoundaryInfo from './components/BoundaryInfo';
-import DebugPanel from './components/DebugPanel';
-import RoomVisualizer from './components/RoomVisualizer';
-import RoomStyler from './components/RoomStyler';
-import './styles/App.css';
-import { extractAllRooms } from './utils/floorPlanUtils';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import BoundaryCanvas from "./components/BoundaryCanvas";
+import TextInput from "./components/TextInput";
+import BoundaryInfo from "./components/BoundaryInfo";
+import DebugPanel from "./components/DebugPanel";
+import RoomVisualizer from "./components/RoomVisualizer";
+import "./styles/App.css";
+import { extractAllRooms } from "./utils/floorPlanUtils";
 
 function App() {
   const [boundaryData, setBoundaryData] = useState(null);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState("");
   const [generatedFloorPlan, setGeneratedFloorPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const editorRef = useRef(null);
-  
-  // Add state for room colors
-  const [roomColors, setRoomColors] = useState({});
-  
+
   // 添加状态存储提取后的房间数据
   const [extractedRooms, setExtractedRooms] = useState([]);
-  
+
   // API基础URL
-  const apiBaseUrl = process.env.NODE_ENV === 'production' 
-    ? window.location.origin
-    : 'http://localhost:5000';
+  const apiBaseUrl =
+    process.env.NODE_ENV === "production"
+      ? window.location.origin
+      : "http://localhost:5001";
 
   // Handle boundary data changes safely
   const handleBoundaryChange = useCallback((data) => {
     try {
       // Log boundary data for debugging
       console.log("Boundary data received:", data);
-      
+
       // Validate the incoming data
       if (data && Array.isArray(data)) {
         setBoundaryData(data);
@@ -50,28 +47,28 @@ function App() {
       setError("Error processing boundary data");
     }
   }, []);
-  
+
   // Function to manually force a boundary capture
   const forceBoundaryCapture = useCallback(() => {
     if (!window.editor) {
       setError("Editor not initialized yet");
       return;
     }
-    
+
     try {
       // Try to get shapes from the editor
       const shapes = window.editor.getCurrentPageShapes?.() || [];
       console.log("Manual capture - found shapes:", shapes);
-      
+
       if (shapes.length > 0) {
         // Process shapes into boundary data
-        const processedData = shapes.map(shape => {
+        const processedData = shapes.map((shape) => {
           const props = shape.props || {};
-          
+
           // For geo shapes, ensure we're getting width and height correctly
           let width = 0;
           let height = 0;
-          
+
           if (props.w !== undefined) {
             width = props.w;
           } else if (props.width !== undefined) {
@@ -79,7 +76,7 @@ function App() {
           } else {
             width = 100; // Default fallback
           }
-          
+
           if (props.h !== undefined) {
             height = props.h;
           } else if (props.height !== undefined) {
@@ -87,10 +84,10 @@ function App() {
           } else {
             height = 100; // Default fallback
           }
-          
+
           return {
             id: shape.id,
-            type: shape.type || 'rectangle',
+            type: shape.type || "rectangle",
             x: shape.x || 0,
             y: shape.y || 0,
             width: width,
@@ -101,7 +98,7 @@ function App() {
             heightInUnits: parseFloat((height * 0.1).toFixed(2)),
           };
         });
-        
+
         console.log("Manual capture - processed data:", processedData);
         setBoundaryData(processedData);
         setError(null);
@@ -113,7 +110,7 @@ function App() {
       setError(`Error capturing boundaries: ${err.message}`);
     }
   }, []);
-  
+
   // Reset the state
   const resetState = useCallback(() => {
     setBoundaryData(null);
@@ -127,72 +124,78 @@ function App() {
    * @param {Array} boundaries - 边界数据
    * @param {Object} preferences - 可选参数
    */
-  const generateFloorPlanStream = async (promptText, boundaries, preferences = {}) => {
+  const generateFloorPlanStream = async (
+    promptText,
+    boundaries,
+    preferences = {}
+  ) => {
     // 重置流文本
     setStreamingText("");
     setIsStreaming(true);
-    
+
     try {
       // 构建API请求URL
       const apiUrl = `${apiBaseUrl}/api/generate-floor-plan-stream`;
       console.log(`Sending stream request to: ${apiUrl}`);
-      
+
       // 准备请求数据
       const requestData = {
         boundary_data: boundaries,
         description: promptText,
-        preferences: preferences
+        preferences: preferences,
       };
-      
+
       // 创建事件源
-      const eventSource = new EventSource(`${apiUrl}?data=${encodeURIComponent(JSON.stringify(requestData))}`);
-      
+      const eventSource = new EventSource(
+        `${apiUrl}?data=${encodeURIComponent(JSON.stringify(requestData))}`
+      );
+
       // 使用fetch发送POST请求并获取流式响应
       const response = await fetch(apiUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(requestData),
       });
-      
+
       // 检查HTTP状态
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
-      
+
       // 获取响应的可读流
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      
+
       // 处理流数据
       let done = false;
       let accumulatedData = "";
-      
+
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
-        
+
         if (done) break;
-        
+
         // 解码二进制数据为文本
         const textChunk = decoder.decode(value);
         accumulatedData += textChunk;
-        
+
         // 处理SSE格式数据
         const events = accumulatedData.split("\n\n");
         accumulatedData = events.pop() || ""; // 最后一个可能不完整
-        
+
         for (const event of events) {
           if (event.startsWith("data: ")) {
             const jsonData = event.substring(6); // 移除 "data: " 前缀
             try {
               const data = JSON.parse(jsonData);
-              
+
               // 根据数据类型处理
               if (data.type === "chunk") {
                 // 更新流式文本
-                setStreamingText(prev => prev + data.content);
+                setStreamingText((prev) => prev + data.content);
               } else if (data.type === "final") {
                 // 流式响应完成，设置最终结果
                 setStreamingText("");
@@ -201,8 +204,8 @@ function App() {
                   data: {
                     floor_plan: JSON.parse(data.floor_plan),
                     boundary: boundaries,
-                    description: promptText
-                  }
+                    description: promptText,
+                  },
                 });
                 setIsStreaming(false);
               } else if (data.type === "error") {
@@ -214,13 +217,13 @@ function App() {
           }
         }
       }
-      
+
       return { success: true };
     } catch (error) {
-      console.error('Stream generation failed:', error);
+      console.error("Stream generation failed:", error);
       setStreamingText("");
       setIsStreaming(false);
-      setError(error.message || 'Stream generation failed');
+      setError(error.message || "Stream generation failed");
       return { success: false, error: error.message };
     }
   };
@@ -229,23 +232,23 @@ function App() {
     console.log("Generate button clicked");
     console.log("Current boundary data:", boundaryData);
     console.log("Current description:", description);
-    
+
     if (!boundaryData || boundaryData.length === 0) {
       console.warn("No boundary data available");
-      
+
       // Try to force capture before alerting
       forceBoundaryCapture();
-      
+
       // If still no boundary data after forced capture
       if (!boundaryData || boundaryData.length === 0) {
-        alert('Please draw a boundary on the canvas.');
+        alert("Please draw a boundary on the canvas.");
         return;
       }
     }
 
     if (!description.trim()) {
       console.warn("No description provided");
-      alert('Please enter a description for your floor plan.');
+      alert("Please enter a description for your floor plan.");
       return;
     }
 
@@ -253,20 +256,26 @@ function App() {
     console.log("Setting loading state");
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // 使用流式生成代替普通生成
-      const result = await generateFloorPlanStream(description, boundaryData, {});
-      
+      const result = await generateFloorPlanStream(
+        description,
+        boundaryData,
+        {}
+      );
+
       if (!result.success) {
         throw new Error(result.error);
       }
-      
+
       // 注意：流式生成结果会由流处理函数设置到状态中
     } catch (error) {
-      console.error('Error generating floor plan:', error);
-      setError(error.message || 'Error generating floor plan. Please try again.');
-      alert(error.message || 'Error generating floor plan. Please try again.');
+      console.error("Error generating floor plan:", error);
+      setError(
+        error.message || "Error generating floor plan. Please try again."
+      );
+      alert(error.message || "Error generating floor plan. Please try again.");
     } finally {
       console.log("Generation process complete");
       setIsLoading(false);
@@ -280,24 +289,23 @@ function App() {
     }
   }, [generatedFloorPlan]);
 
-  // Handle room color changes
-  const handleRoomColorChange = useCallback((colors) => {
-    setRoomColors(colors);
-  }, []);
-
   // 在 floorPlan 生成后处理房间数据
   useEffect(() => {
     if (generatedFloorPlan && boundaryData) {
       try {
         console.log("Extracting room data for styling");
-        
+
         // 检查是否有 JSON 结果
         let jsonData = null;
         if (generatedFloorPlan.data?.floor_plan?.json_result) {
           // 如果 json_result 是字符串，尝试解析它
-          if (typeof generatedFloorPlan.data.floor_plan.json_result === 'string') {
+          if (
+            typeof generatedFloorPlan.data.floor_plan.json_result === "string"
+          ) {
             try {
-              jsonData = JSON.parse(generatedFloorPlan.data.floor_plan.json_result);
+              jsonData = JSON.parse(
+                generatedFloorPlan.data.floor_plan.json_result
+              );
               console.log("Parsed JSON data:", jsonData);
             } catch (e) {
               console.error("Failed to parse JSON string:", e);
@@ -309,22 +317,14 @@ function App() {
             jsonData = generatedFloorPlan.data.floor_plan.json_result;
           }
         }
-        
+
         // 使用解析后的 JSON 数据或原始 floorPlanData
-        const rooms = extractAllRooms(jsonData || generatedFloorPlan, boundaryData);
+        const rooms = extractAllRooms(
+          jsonData || generatedFloorPlan,
+          boundaryData
+        );
         console.log("Extracted room data:", rooms);
         setExtractedRooms(rooms);
-        
-        // 初始化房间颜色
-        if (rooms.length > 0 && Object.keys(roomColors).length === 0) {
-          const initialColors = {};
-          // 为每个唯一的房间类型设置默认颜色
-          const uniqueTypes = [...new Set(rooms.map(r => r.type))];
-          uniqueTypes.forEach(type => {
-            initialColors[type] = 'white'; // 默认白色
-          });
-          setRoomColors(initialColors);
-        }
       } catch (error) {
         console.error("Error extracting room data:", error);
       }
@@ -355,29 +355,20 @@ function App() {
       <main className="main-container">
         <div className="drawing-section">
           <BoundaryCanvas onBoundaryChange={handleBoundaryChange} />
-          
+
           {/* 添加房间可视化组件 */}
           {generatedFloorPlan && editorRef.current && (
-            <RoomVisualizer 
-              floorPlanData={generatedFloorPlan} 
-              editor={editorRef.current} 
+            <RoomVisualizer
+              floorPlanData={generatedFloorPlan}
+              editor={editorRef.current}
               boundaryData={boundaryData}
-              roomColors={roomColors}
             />
           )}
         </div>
 
         <div className="floating-chat-section">
           <h2>Describe Your Floor Plan</h2>
-          
-          {/* Room Styler Component when floor plan is generated */}
-          {generatedFloorPlan && !isStreaming && extractedRooms.length > 0 && (
-            <RoomStyler 
-              floorPlanData={{ rooms: extractedRooms }} 
-              onColorChange={handleRoomColorChange}
-            />
-          )}
-          
+
           {/* 生成的结果显示在上方 */}
           {isStreaming && (
             <div className="stream-section">
@@ -387,38 +378,52 @@ function App() {
               </div>
             </div>
           )}
-          
+
           {generatedFloorPlan && !isStreaming && (
             <div className="result-section">
               <h2>Generated Floor Plan</h2>
               <div className="result-tabs">
                 <div className="result-content">
                   <div className="result-info">
-                    <p><strong>Description:</strong> {generatedFloorPlan.data.description}</p>
-                    <p><strong>Boundary Data:</strong> {generatedFloorPlan.data.boundary.length} shape(s)</p>
+                    <p>
+                      <strong>Description:</strong>{" "}
+                      {generatedFloorPlan.data.description}
+                    </p>
+                    <p>
+                      <strong>Boundary Data:</strong>{" "}
+                      {generatedFloorPlan.data.boundary.length} shape(s)
+                    </p>
                   </div>
-                  
+
                   <div className="result-json">
                     <h3>Floor Plan Structure</h3>
                     <div className="json-section">
-                      <pre>{JSON.stringify(generatedFloorPlan.data.floor_plan.json_result, null, 2)}</pre>
+                      <pre>
+                        {JSON.stringify(
+                          generatedFloorPlan.data.floor_plan.json_result,
+                          null,
+                          2
+                        )}
+                      </pre>
                     </div>
-                    
+
                     <h3>Thinking Process</h3>
                     <div className="thinking-section">
-                      <pre className="thinking-content">{generatedFloorPlan.data.floor_plan.thinking_steps}</pre>
+                      <pre className="thinking-content">
+                        {generatedFloorPlan.data.floor_plan.thinking_steps}
+                      </pre>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           )}
-          
+
           {/* 输入控件固定在底部 */}
           <div className="input-container">
-            <TextInput 
-              value={description} 
-              onChange={setDescription} 
+            <TextInput
+              value={description}
+              onChange={setDescription}
               onGenerate={handleGenerate}
               isLoading={isLoading || isStreaming}
               hasResults={generatedFloorPlan !== null || isStreaming}
@@ -426,14 +431,14 @@ function App() {
           </div>
         </div>
       </main>
-      
+
       {/* Debug panel for development */}
-      <DebugPanel 
-        boundaryData={boundaryData} 
-        floorPlanData={generatedFloorPlan} 
+      <DebugPanel
+        boundaryData={boundaryData}
+        floorPlanData={generatedFloorPlan}
       />
     </div>
   );
 }
 
-export default App; 
+export default App;
