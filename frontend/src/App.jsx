@@ -5,7 +5,9 @@ import BoundaryInfo from './components/BoundaryInfo';
 import DebugPanel from './components/DebugPanel';
 import RoomVisualizer from './components/RoomVisualizer';
 import RoomStyler from './components/RoomStyler';
+import ApiTestWindow from './components/ApiTestWindow';
 import './styles/App.css';
+import './styles/ApiTestWindow.css';
 import { extractAllRooms } from './utils/floorPlanUtils';
 
 function App() {
@@ -23,6 +25,9 @@ function App() {
   
   // 添加状态存储提取后的房间数据
   const [extractedRooms, setExtractedRooms] = useState([]);
+  
+  // New state for API test window
+  const [showApiTestWindow, setShowApiTestWindow] = useState(false);
   
   // API基础URL
   const apiBaseUrl = process.env.NODE_ENV === 'production' 
@@ -333,6 +338,34 @@ function App() {
 
   return (
     <div className="app-fullscreen">
+      {/* Add API Test toggle button in the top-right */}
+      <button 
+        className="api-test-toggle-button" 
+        onClick={() => setShowApiTestWindow(!showApiTestWindow)}
+        style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          zIndex: 1001,
+          backgroundColor: '#0078d7',
+          color: 'white',
+          padding: '8px 16px',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}
+      >
+        {showApiTestWindow ? 'Hide API Test' : 'Show API Test'}
+      </button>
+      
+      {/* Show API Test Window when toggled */}
+      {showApiTestWindow && (
+        <ApiTestWindow 
+          floorPlanData={generatedFloorPlan?.data?.floor_plan?.json_result || generatedFloorPlan?.data?.floor_plan} 
+          onClose={() => setShowApiTestWindow(false)} 
+        />
+      )}
+      
       <header>
         <h1>LLM Floor Plan Generator</h1>
         <div className="header-actions">
