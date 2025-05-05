@@ -12,26 +12,52 @@ logger = logging.getLogger(__name__)
 
 # 尝试多种方式获取API密钥
 def get_api_key():
-    # 1. 首先检查环境变量
+    # 0. 首先强制加载.env文件
+    try:
+        # 尝试从当前目录和上级目录加载.env文件
+        dotenv_path = find_dotenv(usecwd=True)
+        if dotenv_path:
+            logger.info(f"找到.env文件: {dotenv_path}")
+            load_dotenv(dotenv_path)
+        else:
+            logger.warning("find_dotenv()未找到.env文件")
+            
+            # 尝试从固定路径加载
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            env_path = os.path.join(backend_dir, '.env')
+            logger.info(f"尝试从固定路径加载.env文件: {env_path}")
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+    except Exception as e:
+        logger.error(f"加载.env文件失败: {str(e)}")
+    
+    # 1. 从环境变量获取
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if api_key:
-        logger.info("从环境变量中获取到API密钥")
-        return api_key
+        # 检查API密钥格式
+        if api_key.startswith("sk-or-"):
+            logger.info("从环境变量中获取到有效的API密钥")
+            return api_key.strip()  # 确保没有空白字符
+        else:
+            logger.warning(f"环境变量中的API密钥格式不正确: {api_key[:10]}...")
         
-    # 2. 尝试从.env文件读取
+    # 2. 尝试从.env文件直接读取
     try:
         env_path = find_dotenv()
         logger.info(f"尝试从.env文件读取密钥: {env_path}")
-        if env_path:
+        if env_path and os.path.exists(env_path):
             with open(env_path, 'r') as f:
                 content = f.read()
                 match = re.search(r'OPENROUTER_API_KEY=([^\s]+)', content)
                 if match:
                     api_key = match.group(1).strip()
-                    logger.info("从.env文件中成功读取API密钥")
-                    # 设置到环境变量中
-                    os.environ["OPENROUTER_API_KEY"] = api_key
-                    return api_key
+                    if api_key.startswith("sk-or-"):
+                        logger.info("从.env文件中成功读取API密钥")
+                        # 设置到环境变量中
+                        os.environ["OPENROUTER_API_KEY"] = api_key
+                        return api_key
+                    else:
+                        logger.warning(f".env文件中的API密钥格式不正确: {api_key[:10]}...")
     except Exception as e:
         logger.error(f"读取.env文件失败: {str(e)}")
         
@@ -46,10 +72,13 @@ def get_api_key():
                 match = re.search(r'OPENROUTER_API_KEY=([^\s]+)', content)
                 if match:
                     api_key = match.group(1).strip()
-                    logger.info("从指定路径成功读取API密钥")
-                    # 设置到环境变量中
-                    os.environ["OPENROUTER_API_KEY"] = api_key
-                    return api_key
+                    if api_key.startswith("sk-or-"):
+                        logger.info("从指定路径成功读取API密钥")
+                        # 设置到环境变量中
+                        os.environ["OPENROUTER_API_KEY"] = api_key
+                        return api_key
+                    else:
+                        logger.warning(f"指定路径中的API密钥格式不正确: {api_key[:10]}...")
     except Exception as e:
         logger.error(f"从指定路径读取.env文件失败: {str(e)}")
     
@@ -58,8 +87,9 @@ def get_api_key():
 # 获取API密钥
 OPENROUTER_API_KEY = get_api_key()
 logger.info(f"API密钥加载状态: {'成功' if OPENROUTER_API_KEY else '失败'}")
-
-if not OPENROUTER_API_KEY:
+if OPENROUTER_API_KEY:
+    logger.info(f"API密钥前10位: {OPENROUTER_API_KEY[:10]}...")
+else:
     logger.error("OPENROUTER_API_KEY未设置，将在运行时再次尝试获取")
 
 def process_boundary_data(boundary_data):
@@ -120,6 +150,10 @@ def generate_floor_plan(boundary_data, description, preferences=None):
         if not api_key:
             return None, False, "无法获取API密钥，请检查.env文件或环境变量"
         
+        # 验证API密钥格式
+        if not api_key.startswith("sk-or-"):
+            return None, False, f"API密钥格式不正确: {api_key[:10]}...，应以sk-or-开头"
+            
         # 处理边界数据
         processed_boundary = process_boundary_data(boundary_data)
         logger.info(f"处理后的边界数据: 总面积={processed_boundary['total_area']}平方米, 形状数量={processed_boundary['shapes_count']}")
@@ -194,13 +228,15 @@ def generate_floor_plan(boundary_data, description, preferences=None):
         # 发送API请求
         logger.info("使用requests库发送API请求至OpenRouter")
         try:
-            # 构建请求头
+            # 构建请求头 - 确保格式正确
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {api_key.strip()}",  # 确保没有空白字符
                 "HTTP-Referer": "https://floorplan-generator.com",
                 "X-Title": "LLM Floor Plan Generator"
             }
+            
+            logger.info(f"API请求Authorization头部: Bearer {api_key[:10]}...")
             
             # 构建请求体
             payload = {
@@ -341,6 +377,11 @@ def generate_floor_plan_stream(boundary_data, description, preferences=None):
         if not api_key:
             yield json.dumps({"error": "无法获取API密钥，请检查.env文件或环境变量"})
             return
+            
+        # 验证API密钥格式
+        if not api_key.startswith("sk-or-"):
+            yield json.dumps({"error": f"API密钥格式不正确: {api_key[:10]}...，应以sk-or-开头"})
+            return
         
         # 处理边界数据
         processed_boundary = process_boundary_data(boundary_data)
@@ -419,10 +460,12 @@ def generate_floor_plan_stream(boundary_data, description, preferences=None):
         # 构建请求头
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {api_key.strip()}", # 确保没有空白字符
             "HTTP-Referer": "https://floorplan-generator.com",
             "X-Title": "LLM Floor Plan Generator"
         }
+        
+        logger.info(f"API请求Authorization头部: Bearer {api_key[:10]}...")
         
         # 构建请求体
         payload = {
