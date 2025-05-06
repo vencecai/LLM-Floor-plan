@@ -234,9 +234,6 @@ You can customize various aspects of the generated floor plans:
 - If you encounter OpenRouter API issues, try using the `direct_test.py` script in the backend directory to test the connection.
 - For frontend issues, check the browser's developer console (F12) for error messages.
 
-## License
-This project is provided as open-source software. Feel free to modify and extend it for your own projects.
-
 ## Acknowledgments
 - Built using Rhino and Grasshopper
 - Uses OpenRouter to access Anthropic's Claude models for natural language processing
