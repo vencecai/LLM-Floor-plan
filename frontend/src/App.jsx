@@ -338,34 +338,6 @@ function App() {
 
   return (
     <div className="app-fullscreen">
-      {/* Add API Test toggle button in the top-right */}
-      <button 
-        className="api-test-toggle-button" 
-        onClick={() => setShowApiTestWindow(!showApiTestWindow)}
-        style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          zIndex: 1001,
-          backgroundColor: '#0078d7',
-          color: 'white',
-          padding: '8px 16px',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
-      >
-        {showApiTestWindow ? 'Hide API Test' : 'Show API Test'}
-      </button>
-      
-      {/* Show API Test Window when toggled */}
-      {showApiTestWindow && (
-        <ApiTestWindow 
-          floorPlanData={generatedFloorPlan?.data?.floor_plan?.json_result || generatedFloorPlan?.data?.floor_plan} 
-          onClose={() => setShowApiTestWindow(false)} 
-        />
-      )}
-      
       <header>
         <h1>LLM Floor Plan Generator</h1>
         <div className="header-actions">
@@ -375,8 +347,22 @@ function App() {
           <button className="header-button" onClick={resetState}>
             Reset
           </button>
+          <button 
+            className="header-button api-test-toggle" 
+            onClick={() => setShowApiTestWindow(!showApiTestWindow)}
+          >
+            {showApiTestWindow ? 'Hide API Test' : 'Show API Test'}
+          </button>
         </div>
       </header>
+      
+      {/* Show API Test Window when toggled */}
+      {showApiTestWindow && (
+        <ApiTestWindow 
+          floorPlanData={generatedFloorPlan?.data?.floor_plan?.json_result || generatedFloorPlan?.data?.floor_plan} 
+          onClose={() => setShowApiTestWindow(false)} 
+        />
+      )}
 
       {error && (
         <div className="error-notification">

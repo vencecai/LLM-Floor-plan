@@ -51,6 +51,14 @@ header h1 {
   background-color: #e2e8f0;
 }
 
+.header-button.api-test-toggle {
+  background-color: #b3d3ed;
+}
+
+.header-button.api-test-toggle:hover {
+  background-color: #73a4ce;
+}
+
 /* Main container with full screen layout */
 .main-container {
   display: flex;
