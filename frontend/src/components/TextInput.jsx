@@ -7,7 +7,7 @@ function TextInput({ value, onChange, onGenerate, isLoading, hasResults }) {
 
   const examplePrompts = [
     "Create a 2-bedroom apartment with an open kitchen-living area, a bathroom, and a small office space.",
-    "Design a small studio with a kitchen area, bathroom, and multi-purpose living space. Maximize natural light.",
+    "Design a small studio with a kitchen area, bathroom, and multi-purpose living space.",
     "Generate a family home with 3 bedrooms, 2 bathrooms, a kitchen, dining room, living room, and a home office."
   ];
 

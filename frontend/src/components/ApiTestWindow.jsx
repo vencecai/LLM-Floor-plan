@@ -6,8 +6,9 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
   const [apiResponse, setApiResponse] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [processedData, setProcessedData] = useState(null);
-  const [apiUrl, setApiUrl] = useState('http://localhost:5294/api/Apartment');
+  const [apiUrl, setApiUrl] = useState('http://localhost:5000/api');
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Process the floor plan data when it changes
   useEffect(() => {
@@ -236,16 +237,73 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
     }
   };
   
+  const saveToLocalPath = async () => {
+    setIsSaving(true);
+    setApiError(null);
+    
+    try {
+      // Use the processed data or prepare it again
+      const data = processedData || prepareApartmentData(floorPlanData);
+      
+      if (!data) {
+        throw new Error('No valid floor plan data available');
+      }
+      
+      console.log('Saving data to local path:', data);
+      
+      // Send data to the Python backend to save to local path
+      const response = await fetch(`${apiUrl}/save-local`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: data,
+          path: 'C:\\Users\\Kenne\\AppData\\Roaming\\Grasshopper\\Libraries'
+        })
+      }).catch(error => {
+        throw new Error(`Network error: ${error.message || 'Failed to connect to API'}`);
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'No error details available');
+        throw new Error(`Save request failed with status ${response.status}: ${errorText}`);
+      }
+      
+      const responseData = await response.json();
+      setApiResponse({
+        ...responseData,
+        saveTime: new Date().toLocaleString(),
+        saveStatus: 'success'
+      });
+      console.log('Save response:', responseData);
+      
+      // 显示保存成功消息，如果浏览器支持通知API
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Save successful', {
+          body: `Floor plan saved to: ${responseData.file_path}`,
+          icon: '/favicon.ico'
+        });
+      } else {
+        // 页面内显示保存成功信息
+        alert(`Floor plan saved successfully to Grasshopper Libraries folder!`);
+      }
+    } catch (error) {
+      console.error('Save request error:', error);
+      setApiError(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   return (
     <div className="api-test-window">
       <div className="window-header">
-        <h3>ASP.NET Core API Test</h3>
+        <h3>Save Floor Plan to Grasshopper</h3>
         <button className="close-button" onClick={onClose}>×</button>
       </div>
       
       <div className="window-content">
         <div className="api-config">
-          <label htmlFor="apiUrl">API Endpoint:</label>
+          <label htmlFor="apiUrl">API Server URL:</label>
           <input 
             type="text" 
             id="apiUrl" 
@@ -262,21 +320,25 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
           </button>
         </div>
         
-        <div className="button-container">
-          <button 
-            className="api-send-button" 
-            onClick={sendToApi}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Sending...' : 'Send to ASP.NET API'}
-          </button>
-        </div>
-        
-        <div className="data-status">
+        <div className="save-info">
+          <h4>Save Information</h4>
+          <p className="save-path-info">
+            <strong>Save Path:</strong> C:\Users\Kenne\AppData\Roaming\Grasshopper\Libraries
+          </p>
           <p>
             <strong>Data Status:</strong> 
-            {processedData ? 'Floor plan data ready to send' : 'No floor plan data available'}
+            {processedData ? 'Floor plan data ready to save' : 'No floor plan data available'}
           </p>
+        </div>
+        
+        <div className="button-container">
+          <button 
+            className="api-save-button" 
+            onClick={saveToLocalPath}
+            disabled={isSaving || !processedData}
+          >
+            {isSaving ? 'Saving...' : 'Save to Grasshopper'}
+          </button>
         </div>
         
         {apiError && (
@@ -286,26 +348,27 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
             <div className="troubleshooting-tips">
               <h5>Troubleshooting Tips:</h5>
               <ul>
-                <li>Verify the ASP.NET Core API is running on the specified port</li>
-                <li>Check that CORS is enabled on your API server</li>
-                <li>Make sure the API endpoint URL is correct</li>
-                <li>Check your browser's network tab for more details</li>
+                <li>Verify the backend API is running</li>
+                <li>Check that the API URL is correct</li>
+                <li>Ensure save path exists and is writable</li>
+                <li>Check browser network panel for more details</li>
               </ul>
             </div>
           </div>
         )}
         
-        {apiResponse && (
-          <div className="api-response">
-            <h4>API Response:</h4>
-            <pre>{JSON.stringify(apiResponse, null, 2)}</pre>
+        {apiResponse && apiResponse.saveStatus === 'success' && (
+          <div className="api-response success">
+            <h4>Save Successful!</h4>
+            <p>File saved to: <code>{apiResponse.file_path}</code></p>
+            <p>Save time: {apiResponse.saveTime}</p>
           </div>
         )}
         
         {processedData && (
           <div className="data-preview">
-            <h4>Data Preview:</h4>
-            <pre>{JSON.stringify(processedData, null, 2)}</pre>
+            <h4>Floor Plan Data Preview:</h4>
+            <pre>{JSON.stringify(processedData, null, 2).substring(0, 300)}...</pre>
           </div>
         )}
       </div>

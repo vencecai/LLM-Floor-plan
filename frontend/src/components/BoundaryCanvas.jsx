@@ -46,8 +46,54 @@ function BoundaryCanvas({ onBoundaryChange }) {
       if (shapes && shapes.length > 0) {
         console.log("Processing shapes:", shapes);
         
+        // Log all shape types for debugging
+        const allShapeTypes = shapes.map(shape => shape.type);
+        console.log("All shape types found:", allShapeTypes);
+        
+        // Filter out images, only keep geometric shapes
+        const geoShapes = shapes.filter(shape => {
+          // Define a list of valid geometric shape types
+          const validGeometricTypes = [
+            'rectangle', 
+            'ellipse', 
+            'triangle', 
+            'diamond', 
+            'polygon', 
+            'star', 
+            'line', 
+            'draw', 
+            'frame',
+            'geo',
+            'box',
+            'arrow',
+            'square',
+            'circle',
+            // Add any other shape types that tldraw might use
+            'sticky',
+            'pencil',
+            'group'
+          ];
+          
+          // For debugging
+          console.log(`Shape type: ${shape.type}, isValid: ${validGeometricTypes.includes(shape.type)}`);
+          
+          // Check if shape type is geometric (not image, video, etc.)
+          return shape.type !== 'image' && 
+                 shape.type !== 'video' && 
+                 shape.type !== 'note' && 
+                 validGeometricTypes.includes(shape.type);
+        });
+        console.log("Filtered geometric shapes:", geoShapes);
+        
+        // If no geometric shapes remain after filtering
+        if (geoShapes.length === 0) {
+          console.log("No geometric shapes found, only images");
+          onBoundaryChange([]);
+          return;
+        }
+        
         // Map shapes to boundary data format
-        const boundaryData = shapes.map(shape => {
+        const boundaryData = geoShapes.map(shape => {
           // Extract shape properties safely
           const props = shape.props || {};
           

@@ -604,4 +604,27 @@ header h1 {
   padding: 1rem 1.5rem;
   background-color: white;
   border-top: 1px solid #edf2f7;
+}
+
+/* 保存按钮样式 */
+.save-button {
+  background-color: #4CAF50 !important;
+  color: white !important;
+  font-weight: bold;
+}
+
+.save-button:hover {
+  background-color: #45a049 !important;
+}
+
+/* 确保按钮在移动设备上也显示良好 */
+@media (max-width: 768px) {
+  .header-actions .header-button {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  .save-button {
+    margin-top: 8px;
+  }
 } 

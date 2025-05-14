@@ -2,8 +2,11 @@ from flask import Blueprint, request, jsonify, Response, stream_with_context
 from app.services import floor_plan_service
 import traceback
 import logging
+import os
+import json
+import datetime
 
-# 设置日志
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -12,37 +15,37 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 @api_bp.route('/generate-floor-plan', methods=['POST'])
 def generate_floor_plan():
     """
-    接收前端发送的边界数据和描述，生成平面图
+    Receive boundary data and description from frontend to generate a floor plan
     
-    请求体应包含:
-    - boundary_data: 边界形状数据数组
-    - description: 平面图文本描述
-    - preferences: 可选的偏好设置
+    Request body should contain:
+    - boundary_data: Boundary shape data array
+    - description: Floor plan text description
+    - preferences: Optional preference settings
     
-    返回:
-    - 生成的平面图JSON数据
+    Returns:
+    - Generated floor plan JSON data
     """
     try:
         data = request.get_json()
-        logger.info(f"接收到请求数据: {data}")
+        logger.info(f"Received request data: {data}")
         
         if not data:
             return jsonify({'error': 'Missing request data'}), 400
             
-        # 提取必要的输入
+        # Extract necessary inputs
         boundary_data = data.get('boundary_data')
         description = data.get('description')
         preferences = data.get('preferences', {})
         
-        # 验证输入
+        # Validate inputs
         if not boundary_data:
             return jsonify({'error': 'Missing boundary data'}), 400
             
         if not description:
             return jsonify({'error': 'Missing description text'}), 400
             
-        # 调用服务处理请求
-        logger.info(f"开始生成平面图，描述: {description[:50]}...")
+        # Call service to process request
+        logger.info(f"Starting floor plan generation, description: {description[:50]}...")
         floor_plan_json, success, message = floor_plan_service.generate_floor_plan(
             boundary_data, 
             description,
@@ -50,11 +53,11 @@ def generate_floor_plan():
         )
         
         if not success:
-            logger.error(f"生成平面图失败: {message}")
+            logger.error(f"Floor plan generation failed: {message}")
             return jsonify({'error': message}), 400
             
-        # 返回生成的平面图数据
-        logger.info("成功生成平面图")
+        # Return generated floor plan data
+        logger.info("Floor plan generated successfully")
         return jsonify({
             'message': message,
             'floor_plan': floor_plan_json,
@@ -64,36 +67,36 @@ def generate_floor_plan():
         
     except Exception as e:
         error_detail = traceback.format_exc()
-        logger.error(f"处理请求时发生错误: {str(e)}\n{error_detail}")
+        logger.error(f"Error processing request: {str(e)}\n{error_detail}")
         return jsonify({'error': str(e), 'detail': error_detail}), 500
 
 
 @api_bp.route('/generate-floor-plan-stream', methods=['POST'])
 def generate_floor_plan_stream():
     """
-    流式生成平面图
+    Stream floor plan generation
     
-    请求体应包含:
-    - boundary_data: 边界形状数据数组
-    - description: 平面图文本描述
-    - preferences: 可选的偏好设置
+    Request body should contain:
+    - boundary_data: Boundary shape data array
+    - description: Floor plan text description
+    - preferences: Optional preference settings
     
-    返回:
-    - 采用SSE(Server-Sent Events)格式的流式响应
+    Returns:
+    - SSE (Server-Sent Events) formatted streaming response
     """
     try:
         data = request.get_json()
-        logger.info(f"接收到流式请求数据: {data}")
+        logger.info(f"Received streaming request data: {data}")
         
         if not data:
             return jsonify({'error': 'Missing request data'}), 400
             
-        # 提取必要的输入
+        # Extract necessary inputs
         boundary_data = data.get('boundary_data')
         description = data.get('description')
         preferences = data.get('preferences', {})
         
-        # 验证输入
+        # Validate inputs
         if not boundary_data:
             return jsonify({'error': 'Missing boundary data'}), 400
             
@@ -102,40 +105,91 @@ def generate_floor_plan_stream():
         
         def generate():
             try:
-                # 调用流式生成服务
-                logger.info(f"开始流式生成平面图，描述: {description[:50]}...")
+                # Call streaming generation service
+                logger.info(f"Starting streaming floor plan generation, description: {description[:50]}...")
                 
-                # 发送初始状态
-                yield 'data: {"type": "start", "message": "开始生成平面图..."}\n\n'
+                # Send initial status
+                yield 'data: {"type": "start", "message": "Starting floor plan generation..."}\n\n'
                 
-                # 使用流式生成函数
+                # Use streaming generation function
                 for chunk in floor_plan_service.generate_floor_plan_stream(
                     boundary_data, 
                     description,
                     preferences
                 ):
-                    # 每个块以SSE格式发送
+                    # Send each chunk as SSE format
                     yield f'data: {chunk}\n\n'
                     
-                logger.info("流式生成平面图结束")
+                logger.info("Streaming floor plan generation completed")
                 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"流式生成过程中发生错误: {error_msg}")
+                logger.error(f"Error during streaming generation: {error_msg}")
                 yield f'data: {{"type": "error", "error": "{error_msg}"}}\n\n'
         
-        # 返回流式响应
+        # Return streaming response
         return Response(
             stream_with_context(generate()), 
             mimetype='text/event-stream',
             headers={
                 'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no',  # 防止Nginx缓冲
+                'X-Accel-Buffering': 'no',  # Prevent Nginx buffering
                 'Connection': 'keep-alive'
             }
         )
         
     except Exception as e:
         error_detail = traceback.format_exc()
-        logger.error(f"处理流式请求时发生错误: {str(e)}\n{error_detail}")
+        logger.error(f"Error processing streaming request: {str(e)}\n{error_detail}")
+        return jsonify({'error': str(e), 'detail': error_detail}), 500
+
+@api_bp.route('/save-local', methods=['POST'])
+def save_floor_plan_to_local():
+    """
+    Save floor plan JSON data to local path
+    
+    Request body should contain:
+    - data: Floor plan JSON data to save
+    - path: Target path (default is Grasshopper Libraries folder)
+    
+    Returns:
+    - Result of save operation
+    """
+    try:
+        data = request.get_json()
+        logger.info(f"Received save request data")
+        
+        if not data:
+            return jsonify({'error': 'Missing request data'}), 400
+            
+        # Get data and path to save
+        floor_plan_data = data.get('data')
+        path = data.get('path', r'C:\Users\Kenne\AppData\Roaming\Grasshopper\Libraries')
+        
+        if not floor_plan_data:
+            return jsonify({'error': 'Missing floor plan data'}), 400
+        
+        # Create filename (using timestamp)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"floor_plan_{timestamp}.json"
+        file_path = os.path.join(path, filename)
+        
+        # Ensure target directory exists
+        os.makedirs(path, exist_ok=True)
+        
+        # Save JSON data to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(floor_plan_data, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Floor plan data saved to: {file_path}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Floor plan saved to {file_path}',
+            'file_path': file_path
+        })
+        
+    except Exception as e:
+        error_detail = traceback.format_exc()
+        logger.error(f"Error saving floor plan data: {str(e)}\n{error_detail}")
         return jsonify({'error': str(e), 'detail': error_detail}), 500 

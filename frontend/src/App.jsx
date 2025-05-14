@@ -23,16 +23,50 @@ function App() {
   // Add state for room colors
   const [roomColors, setRoomColors] = useState({});
   
-  // 添加状态存储提取后的房间数据
+  // Add state to store extracted room data
   const [extractedRooms, setExtractedRooms] = useState([]);
   
   // New state for API test window
   const [showApiTestWindow, setShowApiTestWindow] = useState(false);
   
-  // API基础URL
+  // API base URL
   const apiBaseUrl = process.env.NODE_ENV === 'production' 
     ? window.location.origin
     : 'http://localhost:5000';
+
+  // Function to check if a shape is a valid geometric object
+  const isValidGeometricShape = useCallback((shape) => {
+    // Define a list of valid geometric shape types
+    const validGeometricTypes = [
+      'rectangle', 
+      'ellipse', 
+      'triangle', 
+      'diamond', 
+      'polygon', 
+      'star', 
+      'line', 
+      'draw', 
+      'frame',
+      'geo',
+      'box',
+      'arrow',
+      'square',
+      'circle',
+      // Add any other shape types that tldraw might use
+      'sticky',
+      'pencil',
+      'group'
+    ];
+    
+    // For debugging
+    console.log(`Validating shape type: ${shape.type}, isValid: ${validGeometricTypes.includes(shape.type)}`);
+    
+    // Check if shape type is geometric (not image, video, etc.)
+    return shape.type !== 'image' && 
+           shape.type !== 'video' && 
+           shape.type !== 'note' && 
+           validGeometricTypes.includes(shape.type);
+  }, []);
 
   // Handle boundary data changes safely
   const handleBoundaryChange = useCallback((data) => {
@@ -42,7 +76,18 @@ function App() {
       
       // Validate the incoming data
       if (data && Array.isArray(data)) {
-        setBoundaryData(data);
+        // Filter out any non-geometric objects
+        const geoData = data.filter(item => isValidGeometricShape(item));
+        
+        console.log("Filtered geometric boundary data:", geoData);
+        
+        if (geoData.length === 0 && data.length > 0) {
+          console.warn("No geometric shapes in boundary data");
+          setError("No valid geometry found. Please draw rectangles or other shapes to define boundaries.");
+          return;
+        }
+        
+        setBoundaryData(geoData);
         setError(null);
       } else if (data === null) {
         setBoundaryData(null);
@@ -54,7 +99,7 @@ function App() {
       console.error("Error processing boundary data:", err);
       setError("Error processing boundary data");
     }
-  }, []);
+  }, [isValidGeometricShape]);
   
   // Function to manually force a boundary capture
   const forceBoundaryCapture = useCallback(() => {
@@ -69,8 +114,18 @@ function App() {
       console.log("Manual capture - found shapes:", shapes);
       
       if (shapes.length > 0) {
+        // Filter out non-geometric objects
+        const geoShapes = shapes.filter(shape => isValidGeometricShape(shape));
+        
+        console.log("Manual capture - filtered geometric shapes:", geoShapes);
+        
+        if (geoShapes.length === 0) {
+          setError("No geometric shapes found on canvas. Please draw rectangles or other shapes to define boundaries.");
+          return;
+        }
+        
         // Process shapes into boundary data
-        const processedData = shapes.map(shape => {
+        const processedData = geoShapes.map(shape => {
           const props = shape.props || {};
           
           // For geo shapes, ensure we're getting width and height correctly
@@ -117,7 +172,7 @@ function App() {
       console.error("Error in manual boundary capture:", err);
       setError(`Error capturing boundaries: ${err.message}`);
     }
-  }, []);
+  }, [isValidGeometricShape]);
   
   // Reset the state
   const resetState = useCallback(() => {
@@ -127,32 +182,32 @@ function App() {
   }, []);
 
   /**
-   * 使用流式API生成平面图
-   * @param {string} promptText - 描述文本
-   * @param {Array} boundaries - 边界数据
-   * @param {Object} preferences - 可选参数
+   * Generate floor plan using streaming API
+   * @param {string} promptText - Description text
+   * @param {Array} boundaries - Boundary data
+   * @param {Object} preferences - Optional parameters
    */
   const generateFloorPlanStream = async (promptText, boundaries, preferences = {}) => {
-    // 重置流文本
+    // Reset stream text
     setStreamingText("");
     setIsStreaming(true);
     
     try {
-      // 构建API请求URL
+      // Build API request URL
       const apiUrl = `${apiBaseUrl}/api/generate-floor-plan-stream`;
       console.log(`Sending stream request to: ${apiUrl}`);
       
-      // 准备请求数据
+      // Prepare request data
       const requestData = {
         boundary_data: boundaries,
         description: promptText,
         preferences: preferences
       };
       
-      // 创建事件源
+      // Create event source
       const eventSource = new EventSource(`${apiUrl}?data=${encodeURIComponent(JSON.stringify(requestData))}`);
       
-      // 使用fetch发送POST请求并获取流式响应
+      // Use fetch to send POST request and get streaming response
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -161,16 +216,16 @@ function App() {
         body: JSON.stringify(requestData),
       });
       
-      // 检查HTTP状态
+      // Check HTTP status
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
       
-      // 获取响应的可读流
+      // Get readable stream from response
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       
-      // 处理流数据
+      // Process stream data
       let done = false;
       let accumulatedData = "";
       
@@ -180,26 +235,26 @@ function App() {
         
         if (done) break;
         
-        // 解码二进制数据为文本
+        // Decode binary data to text
         const textChunk = decoder.decode(value);
         accumulatedData += textChunk;
         
-        // 处理SSE格式数据
+        // Process SSE format data
         const events = accumulatedData.split("\n\n");
-        accumulatedData = events.pop() || ""; // 最后一个可能不完整
+        accumulatedData = events.pop() || ""; // Last one may be incomplete
         
         for (const event of events) {
           if (event.startsWith("data: ")) {
-            const jsonData = event.substring(6); // 移除 "data: " 前缀
+            const jsonData = event.substring(6); // Remove "data: " prefix
             try {
               const data = JSON.parse(jsonData);
               
-              // 根据数据类型处理
+              // Process based on data type
               if (data.type === "chunk") {
-                // 更新流式文本
+                // Update streaming text
                 setStreamingText(prev => prev + data.content);
               } else if (data.type === "final") {
-                // 流式响应完成，设置最终结果
+                // Stream response complete, set final result
                 setStreamingText("");
                 setGeneratedFloorPlan({
                   message: data.message,
@@ -247,6 +302,14 @@ function App() {
         return;
       }
     }
+    
+    // Check that we only have geometric objects
+    const nonGeoObjects = boundaryData.filter(item => !isValidGeometricShape(item));
+    if (nonGeoObjects.length > 0) {
+      console.warn("Found non-geometric objects in boundary data");
+      setError("Only geometric shapes can be used as boundaries. Please use rectangles, ellipses, or other shapes to define your floor plan.");
+      return;
+    }
 
     if (!description.trim()) {
       console.warn("No description provided");
@@ -260,14 +323,14 @@ function App() {
     setError(null);
     
     try {
-      // 使用流式生成代替普通生成
+      // Use streaming generation instead of regular generation
       const result = await generateFloorPlanStream(description, boundaryData, {});
       
       if (!result.success) {
         throw new Error(result.error);
       }
       
-      // 注意：流式生成结果会由流处理函数设置到状态中
+      // Note: Stream generation results will be set to state by the stream handler
     } catch (error) {
       console.error('Error generating floor plan:', error);
       setError(error.message || 'Error generating floor plan. Please try again.');
@@ -278,7 +341,7 @@ function App() {
     }
   };
 
-  // 保存编辑器实例引用
+  // Store editor instance reference
   useEffect(() => {
     if (window.editor) {
       editorRef.current = window.editor;
@@ -290,43 +353,43 @@ function App() {
     setRoomColors(colors);
   }, []);
 
-  // 在 floorPlan 生成后处理房间数据
+  // Process room data after floor plan is generated
   useEffect(() => {
     if (generatedFloorPlan && boundaryData) {
       try {
         console.log("Extracting room data for styling");
         
-        // 检查是否有 JSON 结果
+        // Check if there's a JSON result
         let jsonData = null;
         if (generatedFloorPlan.data?.floor_plan?.json_result) {
-          // 如果 json_result 是字符串，尝试解析它
+          // If json_result is a string, try to parse it
           if (typeof generatedFloorPlan.data.floor_plan.json_result === 'string') {
             try {
               jsonData = JSON.parse(generatedFloorPlan.data.floor_plan.json_result);
               console.log("Parsed JSON data:", jsonData);
             } catch (e) {
               console.error("Failed to parse JSON string:", e);
-              // 使用原始字符串
+              // Use original string
               jsonData = generatedFloorPlan.data.floor_plan.json_result;
             }
           } else {
-            // 如果已经是对象，直接使用
+            // If it's already an object, use it directly
             jsonData = generatedFloorPlan.data.floor_plan.json_result;
           }
         }
         
-        // 使用解析后的 JSON 数据或原始 floorPlanData
+        // Use parsed JSON data or original floorPlanData
         const rooms = extractAllRooms(jsonData || generatedFloorPlan, boundaryData);
         console.log("Extracted room data:", rooms);
         setExtractedRooms(rooms);
         
-        // 初始化房间颜色
+        // Initialize room colors
         if (rooms.length > 0 && Object.keys(roomColors).length === 0) {
           const initialColors = {};
-          // 为每个唯一的房间类型设置默认颜色
+          // Set default color for each unique room type
           const uniqueTypes = [...new Set(rooms.map(r => r.type))];
           uniqueTypes.forEach(type => {
-            initialColors[type] = 'white'; // 默认白色
+            initialColors[type] = 'white'; // Default white
           });
           setRoomColors(initialColors);
         }
@@ -347,6 +410,26 @@ function App() {
           <button className="header-button" onClick={resetState}>
             Reset
           </button>
+          {generatedFloorPlan && (
+            <button 
+              className="header-button save-button"
+              onClick={() => {
+                if (showApiTestWindow) {
+                  // If API test window is already open, close it
+                  setShowApiTestWindow(false);
+                }
+                // Show API test window and automatically trigger save function
+                setShowApiTestWindow(true);
+                // Short delay to ensure the component is mounted
+                setTimeout(() => {
+                  const saveButton = document.querySelector('.api-save-button');
+                  if (saveButton) saveButton.click();
+                }, 500);
+              }}
+            >
+              Save to Grasshopper
+            </button>
+          )}
           <button 
             className="header-button api-test-toggle" 
             onClick={() => setShowApiTestWindow(!showApiTestWindow)}
@@ -397,7 +480,7 @@ function App() {
             />
           )}
           
-          {/* 生成的结果显示在上方 */}
+          {/* Display generated results above */}
           {isStreaming && (
             <div className="stream-section">
               <div className="stream-content">
@@ -433,7 +516,7 @@ function App() {
             </div>
           )}
           
-          {/* 输入控件固定在底部 */}
+          {/* Input controls fixed at the bottom */}
           <div className="input-container">
             <TextInput 
               value={description} 
