@@ -169,13 +169,20 @@ def save_floor_plan_to_local():
         if not floor_plan_data:
             return jsonify({'error': 'Missing floor plan data'}), 400
         
-        # Create filename (using timestamp)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"floor_plan_{timestamp}.json"
-        file_path = os.path.join(path, filename)
-        
         # Ensure target directory exists
         os.makedirs(path, exist_ok=True)
+        
+        # Fixed filename for the floor plan
+        filename = "floor_plan.json"
+        file_path = os.path.join(path, filename)
+        
+        # Remove any existing floor plan JSON files
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Removed existing floor plan file: {file_path}")
+        except Exception as e:
+            logger.warning(f"Error removing existing file: {str(e)}")
         
         # Save JSON data to file
         with open(file_path, 'w', encoding='utf-8') as f:

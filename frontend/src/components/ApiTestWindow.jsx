@@ -7,7 +7,6 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
   const [apiError, setApiError] = useState(null);
   const [processedData, setProcessedData] = useState(null);
   const [apiUrl, setApiUrl] = useState('http://localhost:5000/api');
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   // Process the floor plan data when it changes
@@ -170,67 +169,26 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
     return apartmentData;
   };
   
-  const testApiConnection = async () => {
-    setIsTestingConnection(true);
+  const testBackendConnection = async () => {
+    setIsLoading(true);
     setApiError(null);
     
     try {
-      // Simple OPTIONS request to test connection
-      const response = await fetch(apiUrl, {
+      // Simple OPTIONS request to test connection to Flask backend
+      const response = await fetch(`${apiUrl}`, {
         method: 'OPTIONS'
       }).catch(error => {
         // This catch will handle network errors that don't reach the server
-        throw new Error(`Network error: ${error.message || 'Failed to connect to API'}`);
+        throw new Error(`Network error: ${error.message || 'Failed to connect to Python backend'}`);
       });
       
       if (response.ok) {
-        setApiResponse({ status: 'Connection successful', timestamp: new Date().toISOString() });
+        setApiResponse({ status: 'Backend connection successful', timestamp: new Date().toISOString() });
       } else {
-        throw new Error(`API connection test failed with status: ${response.status}`);
+        throw new Error(`Backend connection test failed with status: ${response.status}`);
       }
     } catch (error) {
-      console.error('API connection test error:', error);
-      setApiError(error.message);
-    } finally {
-      setIsTestingConnection(false);
-    }
-  };
-  
-  const sendToApi = async () => {
-    setIsLoading(true);
-    setApiError(null);
-    setApiResponse(null);
-    
-    try {
-      // Use the processed data or prepare it again
-      const data = processedData || prepareApartmentData(floorPlanData);
-      
-      if (!data) {
-        throw new Error('No valid floor plan data available');
-      }
-      
-      console.log('Sending data to API:', data);
-      
-      // Send data to the API with more detailed error handling
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).catch(error => {
-        // This catch will handle network errors that don't reach the server
-        throw new Error(`Network error: ${error.message || 'Failed to connect to API'}`);
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'No error details available');
-        throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-      }
-      
-      const responseData = await response.json();
-      setApiResponse(responseData);
-      console.log('API response:', responseData);
-    } catch (error) {
-      console.error('API request error:', error);
+      console.error('Backend connection test error:', error);
       setApiError(error.message);
     } finally {
       setIsLoading(false);
@@ -260,7 +218,7 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
           path: 'C:\\Users\\Kenne\\AppData\\Roaming\\Grasshopper\\Libraries'
         })
       }).catch(error => {
-        throw new Error(`Network error: ${error.message || 'Failed to connect to API'}`);
+        throw new Error(`Network error: ${error.message || 'Failed to connect to Python backend'}`);
       });
       
       if (!response.ok) {
@@ -276,14 +234,14 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
       });
       console.log('Save response:', responseData);
       
-      // 显示保存成功消息，如果浏览器支持通知API
+      // Display success message if browser supports notifications
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('Save successful', {
           body: `Floor plan saved to: ${responseData.file_path}`,
           icon: '/favicon.ico'
         });
       } else {
-        // 页面内显示保存成功信息
+        // Display save success message in the page
         alert(`Floor plan saved successfully to Grasshopper Libraries folder!`);
       }
     } catch (error) {
@@ -303,7 +261,7 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
       
       <div className="window-content">
         <div className="api-config">
-          <label htmlFor="apiUrl">API Server URL:</label>
+          <label htmlFor="apiUrl">Python Backend URL:</label>
           <input 
             type="text" 
             id="apiUrl" 
@@ -313,10 +271,10 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
           />
           <button 
             className="api-test-button" 
-            onClick={testApiConnection}
-            disabled={isTestingConnection}
+            onClick={testBackendConnection}
+            disabled={isLoading}
           >
-            {isTestingConnection ? 'Testing...' : 'Test Connection'}
+            {isLoading ? 'Testing...' : 'Test Backend Connection'}
           </button>
         </div>
         
@@ -324,6 +282,9 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
           <h4>Save Information</h4>
           <p className="save-path-info">
             <strong>Save Path:</strong> C:\Users\Kenne\AppData\Roaming\Grasshopper\Libraries
+          </p>
+          <p>
+            <strong>File Name:</strong> floor_plan.json (any existing file will be replaced)
           </p>
           <p>
             <strong>Data Status:</strong> 
@@ -348,8 +309,8 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
             <div className="troubleshooting-tips">
               <h5>Troubleshooting Tips:</h5>
               <ul>
-                <li>Verify the backend API is running</li>
-                <li>Check that the API URL is correct</li>
+                <li>Verify the Python backend API is running</li>
+                <li>Check that the API URL is correct (default: http://localhost:5000/api)</li>
                 <li>Ensure save path exists and is writable</li>
                 <li>Check browser network panel for more details</li>
               </ul>
@@ -361,6 +322,7 @@ const ApiTestWindow = ({ floorPlanData, onClose }) => {
           <div className="api-response success">
             <h4>Save Successful!</h4>
             <p>File saved to: <code>{apiResponse.file_path}</code></p>
+            <p>Any previous floor plan file has been replaced.</p>
             <p>Save time: {apiResponse.saveTime}</p>
           </div>
         )}

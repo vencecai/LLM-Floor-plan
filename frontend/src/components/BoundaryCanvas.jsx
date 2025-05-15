@@ -61,7 +61,6 @@ function BoundaryCanvas({ onBoundaryChange }) {
             'polygon', 
             'star', 
             'line', 
-            'draw', 
             'frame',
             'geo',
             'box',

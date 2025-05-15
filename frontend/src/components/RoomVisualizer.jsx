@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { nanoid } from 'nanoid';
-import { extractAllRooms, extractFinalNodes } from '../utils/floorPlanUtils';
+import { extractAllRooms, extractFinalNodes, layoutFromSplitStructure } from '../utils/floorPlanUtils';
 
 // 房间类型映射到tldraw支持的颜色名称
 const ROOM_COLORS_MAP = {
@@ -148,24 +148,24 @@ const RoomVisualizer = ({ floorPlanData, editor, boundaryData, roomColors }) => 
     clearRooms();
     
     try {
-      // 直接使用extractFinalNodes函数从JSON数据中提取最终节点
-      const jsonResult = floorPlanData.data?.floor_plan?.json_result;
+      // 获取JSON数据
+      let jsonResult = floorPlanData.data?.floor_plan?.json_result;
       if (!jsonResult) {
         console.warn('No JSON result data found, data structure:', floorPlanData);
         renderInProgressRef.current = false;
         return;
       }
       
-      // 提取最终节点
-      const finalRooms = extractFinalNodes(jsonResult);
-      
-      if (!finalRooms || finalRooms.length === 0) {
-        console.warn('No final rooms found in JSON data:', jsonResult);
-        renderInProgressRef.current = false;
-        return;
+      // 如果是字符串，解析为对象
+      if (typeof jsonResult === 'string') {
+        try {
+          jsonResult = JSON.parse(jsonResult);
+        } catch (error) {
+          console.error('Error parsing json_result string:', error);
+          renderInProgressRef.current = false;
+          return;
+        }
       }
-      
-      console.log('Final rooms to draw:', finalRooms);
       
       // 如果有边界数据，计算绘制位置
       let boundaryRect = { x: 200, y: 200, width: 600, height: 400 };
@@ -181,94 +181,17 @@ const RoomVisualizer = ({ floorPlanData, editor, boundaryData, roomColors }) => 
       
       console.log('Using boundary rect:', boundaryRect);
       
-      // 创建一个递归划分算法来布局房间
-      // 这里使用简化的算法，根据房间面积比例划分空间
-      const totalArea = finalRooms.reduce((sum, room) => sum + room.area, 0);
+      // 直接使用LLM生成的split结构布局房间
+      console.log('Using LLM split structure for layout');
+      const layoutedRooms = layoutFromSplitStructure(jsonResult, boundaryRect);
       
-      // 先按面积从大到小排序
-      const sortedRooms = [...finalRooms].sort((a, b) => b.area - a.area);
+      if (!layoutedRooms || layoutedRooms.length === 0) {
+        console.warn('No rooms generated from split structure:', jsonResult);
+        renderInProgressRef.current = false;
+        return;
+      }
       
-      // 创建简单的格子布局
-      const layoutRooms = (rooms, rect, isHorizontal = true) => {
-        if (rooms.length === 0) return [];
-        if (rooms.length === 1) {
-          return [{
-            ...rooms[0],
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-          }];
-        }
-        
-        // 计算当前组的总面积
-        const groupArea = rooms.reduce((sum, r) => sum + r.area, 0);
-        
-        // 找到最佳分割点
-        let bestIndex = 1;
-        let bestDiff = Infinity;
-        let area1 = 0;
-        
-        for (let i = 1; i < rooms.length; i++) {
-          const areaLeft = rooms.slice(0, i).reduce((sum, r) => sum + r.area, 0);
-          const areaRight = groupArea - areaLeft;
-          const diff = Math.abs(areaLeft - areaRight);
-          
-          if (diff < bestDiff) {
-            bestDiff = diff;
-            bestIndex = i;
-            area1 = areaLeft;
-          }
-        }
-        
-        // 分割成两组
-        const group1 = rooms.slice(0, bestIndex);
-        const group2 = rooms.slice(bestIndex);
-        
-        // 按面积比例分割空间
-        const ratio = area1 / groupArea;
-        
-        let rect1, rect2;
-        if (isHorizontal) {
-          // 水平分割
-          rect1 = {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width * ratio,
-            height: rect.height
-          };
-          rect2 = {
-            x: rect.x + rect.width * ratio,
-            y: rect.y,
-            width: rect.width * (1 - ratio),
-            height: rect.height
-          };
-        } else {
-          // 垂直分割
-          rect1 = {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height * ratio
-          };
-          rect2 = {
-            x: rect.x,
-            y: rect.y + rect.height * ratio,
-            width: rect.width,
-            height: rect.height * (1 - ratio)
-          };
-        }
-        
-        // 递归处理两组
-        return [
-          ...layoutRooms(group1, rect1, !isHorizontal),
-          ...layoutRooms(group2, rect2, !isHorizontal)
-        ];
-      };
-      
-      // 布局房间
-      const layoutedRooms = layoutRooms(sortedRooms, boundaryRect);
-      console.log('Layouted rooms:', layoutedRooms);
+      console.log('Layouted rooms from split structure:', layoutedRooms);
       
       // 创建新的房间形状
       const newShapeIds = layoutedRooms.map(room => {

@@ -187,6 +187,120 @@ export const extractFinalNodes = (jsonData) => {
 };
 
 /**
+ * 直接使用LLM生成的split结构布局房间
+ * @param {Object} splitData - split树结构
+ * @param {Object} boundaryRect - 边界矩形
+ * @returns {Array} 布局后的房间数组
+ */
+export const layoutFromSplitStructure = (splitData, boundaryRect) => {
+  if (!splitData) return [];
+  
+  // 查找根节点
+  let rootNode = splitData;
+  if (splitData.split) {
+    rootNode = splitData.split;
+  } else if (splitData.root) {
+    rootNode = splitData.root;
+  }
+  
+  const layoutedRooms = [];
+  
+  // 递归处理split树
+  const processSplitNode = (node, rect, depth = 0) => {
+    if (!node) return;
+    
+    console.log(`Processing node at depth ${depth}:`, node.name, rect);
+    
+    // 如果是最终节点，添加到结果中
+    if (node.final === true) {
+      layoutedRooms.push({
+        name: node.name || 'Unnamed',
+        type: node.type || node.name || 'room',
+        area: node.area || 0,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        angle: node.angle || 0
+      });
+      return;
+    }
+    
+    // 如果没有子节点，也作为房间处理
+    if (!node.children || node.children.length === 0) {
+      layoutedRooms.push({
+        name: node.name || 'Unnamed',
+        type: node.type || node.name || 'room',
+        area: node.area || 0,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        angle: node.angle || 0
+      });
+      return;
+    }
+    
+    // 有子节点，需要递归处理
+    const childrenWithArea = node.children.map(child => ({
+      ...child,
+      area: child.area || 100 // 确保每个子节点都有面积
+    }));
+    
+    // 计算总面积用于比例划分
+    const totalArea = childrenWithArea.reduce((sum, child) => sum + child.area, 0);
+    
+    // 根据节点的angle属性确定分割方向
+    // 重要：angle属性定义该节点本身的分割方向，不是子节点的排列方式
+    // 根据输入的示例数据和LLM思考过程:
+    // angle = 0：水平分割（上下分割）- 节点被水平线分割成上下两部分
+    // angle ≈ 1.57 (π/2)：垂直分割（左右分割）- 节点被垂直线分割成左右两部分
+    const angle = node.angle || 0;
+    const isVerticalSplit = Math.abs(angle - Math.PI/2) < 0.1; // 判断是否接近π/2
+    
+    console.log(`Node ${node.name} with angle ${angle} - isVerticalSplit: ${isVerticalSplit}`);
+    
+    // 计算子节点的位置
+    let currentOffset = 0;
+    
+    // 注意顺序：根据LLM的想法，第一个子节点通常放在左边或上面
+    childrenWithArea.forEach(child => {
+      // 计算该子节点占用的比例
+      const ratio = child.area / totalArea;
+      
+      let childRect;
+      if (isVerticalSplit) {
+        // 垂直分割线 - 子节点水平排列（左右排列）
+        childRect = {
+          x: rect.x + currentOffset,
+          y: rect.y,
+          width: rect.width * ratio,
+          height: rect.height
+        };
+        currentOffset += rect.width * ratio;
+      } else {
+        // 水平分割线 - 子节点垂直排列（上下排列）
+        childRect = {
+          x: rect.x,
+          y: rect.y + currentOffset,
+          width: rect.width,
+          height: rect.height * ratio
+        };
+        currentOffset += rect.height * ratio;
+      }
+      
+      // 递归处理子节点
+      processSplitNode(child, childRect, depth + 1);
+    });
+  };
+  
+  // 开始处理根节点
+  processSplitNode(rootNode, boundaryRect);
+  
+  return layoutedRooms;
+};
+
+/**
  * 从楼层平面图数据中提取所有房间信息
  * @param {Object} floorPlanData - 楼层平面图数据
  * @param {Object} boundaryData - 边界数据

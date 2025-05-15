@@ -6,6 +6,7 @@ import DebugPanel from './components/DebugPanel';
 import RoomVisualizer from './components/RoomVisualizer';
 import RoomStyler from './components/RoomStyler';
 import ApiTestWindow from './components/ApiTestWindow';
+import CoreApiTestWindow from './components/CoreApiTestWindow';
 import './styles/App.css';
 import './styles/ApiTestWindow.css';
 import { extractAllRooms } from './utils/floorPlanUtils';
@@ -26,8 +27,9 @@ function App() {
   // Add state to store extracted room data
   const [extractedRooms, setExtractedRooms] = useState([]);
   
-  // New state for API test window
-  const [showApiTestWindow, setShowApiTestWindow] = useState(false);
+  // New state for windows
+  const [showGrasshopperWindow, setShowGrasshopperWindow] = useState(false);
+  const [showCoreApiWindow, setShowCoreApiWindow] = useState(false);
   
   // API base URL
   const apiBaseUrl = process.env.NODE_ENV === 'production' 
@@ -45,7 +47,6 @@ function App() {
       'polygon', 
       'star', 
       'line', 
-      'draw', 
       'frame',
       'geo',
       'box',
@@ -414,12 +415,12 @@ function App() {
             <button 
               className="header-button save-button"
               onClick={() => {
-                if (showApiTestWindow) {
-                  // If API test window is already open, close it
-                  setShowApiTestWindow(false);
+                if (showGrasshopperWindow) {
+                  // If Grasshopper window is already open, close it
+                  setShowGrasshopperWindow(false);
                 }
-                // Show API test window and automatically trigger save function
-                setShowApiTestWindow(true);
+                // Show Grasshopper save window and automatically trigger save function
+                setShowGrasshopperWindow(true);
                 // Short delay to ensure the component is mounted
                 setTimeout(() => {
                   const saveButton = document.querySelector('.api-save-button');
@@ -432,18 +433,26 @@ function App() {
           )}
           <button 
             className="header-button api-test-toggle" 
-            onClick={() => setShowApiTestWindow(!showApiTestWindow)}
+            onClick={() => setShowCoreApiWindow(!showCoreApiWindow)}
           >
-            {showApiTestWindow ? 'Hide API Test' : 'Show API Test'}
+            {showCoreApiWindow ? 'Hide Apartment API' : 'Send to Apartment API'}
           </button>
         </div>
       </header>
       
-      {/* Show API Test Window when toggled */}
-      {showApiTestWindow && (
+      {/* Show Grasshopper Save Window when toggled */}
+      {showGrasshopperWindow && (
         <ApiTestWindow 
           floorPlanData={generatedFloorPlan?.data?.floor_plan?.json_result || generatedFloorPlan?.data?.floor_plan} 
-          onClose={() => setShowApiTestWindow(false)} 
+          onClose={() => setShowGrasshopperWindow(false)} 
+        />
+      )}
+
+      {/* Show Core API Test Window when toggled */}
+      {showCoreApiWindow && (
+        <CoreApiTestWindow 
+          floorPlanData={generatedFloorPlan?.data?.floor_plan?.json_result || generatedFloorPlan?.data?.floor_plan} 
+          onClose={() => setShowCoreApiWindow(false)} 
         />
       )}
 
