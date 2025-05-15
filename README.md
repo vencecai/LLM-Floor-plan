@@ -1,21 +1,28 @@
 # LLM Floor Plan Generator
 
-This system enables the generation of floor plans from natural language descriptions using LLM (Large Language Model) technology, offering interfaces for both Rhino/Grasshopper and a web-based frontend.
+This system enables the generation and manipulation of floor plans from natural language descriptions using LLM (Large Language Model) technology, offering a seamless workflow between Rhino/Grasshopper and a web-based interface.
 
 ## System Overview
 
-The project provides two primary interfaces for generating floor plans:
+The project provides an integrated workflow for floor plan generation and manipulation:
 
-1.  **Rhino/Grasshopper Interface:** Utilizes Python components within Grasshopper for users working directly in a CAD environment.
-2.  **Web-Based Frontend Interface:** A React application allowing users to draw initial boundaries and input text descriptions via a web browser.
+1. **Rhino/Grasshopper Integration:** Allows users to reference floor plan outlines from Rhino via screenshots.
+2. **Web-Based Frontend Interface:** A React application enabling users to:
+   - Reference floor plan screenshots from Rhino 
+   - Draw boundaries using the built-in drawing tools
+   - Generate room layouts using LLM-powered text prompts
+   - Visualize and customize the generated floor plans
+3. **Spatial OS Integration:** Connect to Spatial OS's web API to generate apartment objects for further processing.
+4. **Bi-directional Grasshopper Connectivity:** Return generated floor plans back to Rhino/Grasshopper for further manipulation.
 
 Regardless of the interface used, the core floor plan generation process follows a hierarchical top-down approach:
 
-1.  **Input Processing:** Gathers natural language descriptions and optional boundary information (either from Grasshopper inputs or the React frontend).
-2.  **Text to JSON:** Interprets inputs to create a structured JSON representation of the floor plan requirements.
-3.  **Hierarchical Space Partitioning:** Recursively divides space into a tree-like structure of rooms based on the JSON.
-4.  **Topological Graph Generation:** Creates a graph representation with rooms, connections, and spatial relationships.
-5.  **Physical Floor Plan Generation:** Generates the final floor plan geometry (either as Rhino geometry via Grasshopper or potentially visualized in the frontend/exported).
+1. **Boundary Creation:** Draw floor plan boundaries in the frontend, referencing Rhino screenshots if needed.
+2. **LLM-Powered Room Layout:** Use natural language to describe desired room layouts and specifications.
+3. **Hierarchical Space Partitioning:** Recursively divides space into a tree-like structure of rooms based on requirements.
+4. **Topological Graph Generation:** Creates a graph representation with rooms, connections, and spatial relationships.
+5. **Physical Floor Plan Generation:** Generates the final floor plan geometry that can be visualized in the web interface or sent back to Rhino.
+6. **Apartment Object Generation:** Connect to Spatial OS to transform 2D floor plans into apartment objects.
 
 ## Conceptual Approach (Core Logic)
 
@@ -23,8 +30,8 @@ Our system implements a "hierarchical space partitioning + topological graph gen
 
 ### 1. Initial Boundary Definition
 - The system begins with a total boundary:
-    - **Grasshopper:** Defined via Rhino geometry or parameters.
-    - **React Frontend:** Drawn by the user using the tldraw canvas.
+    - **Rhino Reference:** Screenshots from Rhino used as visual reference.
+    - **React Frontend:** Drawn by the user using the tldraw canvas with Rhino screenshots as a guide.
     - **Fallback:** A default rectangular boundary (e.g., FloorPlan(width=20m, height=10m)).
 - This boundary informs the initial root node (id: "root") with geometric coordinates and dimensions in a JSON/DSL format.
 
@@ -41,6 +48,11 @@ Our system implements a "hierarchical space partitioning + topological graph gen
   - Edges contain attributes like "shared wall" or "doorway."
 - The system then calculates node centrality and extracts main circulation paths.
 
+### 4. Spatial OS Integration
+- The generated floor plan can be sent to Spatial OS's web API.
+- This creates apartment objects that can be used for further processing.
+- The integration enables advanced operations and enhancements beyond the initial 2D floor plan.
+
 ## Project Structure
 
 ```
@@ -50,11 +62,15 @@ LLM-Floor-plan/
 │   │   └── index.html
 │   ├── src/
 │   │   ├── components/       # Reusable React components
-│   │   │   ├── BoundaryCanvas.jsx # tldraw integration component
-│   │   │   └── TextInput.jsx      # Text input component
-│   │   ├── hooks/            # Custom React hooks (e.g., useBoundaryData)
-│   │   ├── services/         # API interaction logic (e.g., llmService.js)
+│   │   │   ├── BoundaryCanvas.jsx # tldraw integration for boundary drawing
+│   │   │   ├── TextInput.jsx      # Text input for LLM prompts
+│   │   │   ├── RoomVisualizer.jsx # Visualization of generated rooms
+│   │   │   ├── RoomStyler.jsx     # Styling options for rooms
+│   │   │   └── DebugPanel.jsx     # Debugging information
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── services/         # API interaction logic
 │   │   ├── styles/           # Tailwind CSS base/config
+│   │   ├── utils/            # Utility functions
 │   │   ├── App.jsx           # Main application component
 │   │   └── main.jsx          # Entry point
 │   ├── index.html            # Main HTML file
@@ -63,17 +79,11 @@ LLM-Floor-plan/
 │   ├── tailwind.config.js
 │   └── README.md             # Frontend specific details
 ├── grasshopper_components/   # Grasshopper components & related Python scripts
-│   ├── text_to_json.py
-│   ├── json_to_graph.py
-│   └── graph_to_floorplan.py
+│   └── gh_convert.py         # Converts JSON layout to Rhino geometry
+├── gh/                       # Grasshopper definition files
+│   └── json_2_curve_update.gh # Updated Grasshopper definition
 ├── backend/                  # Backend server for API communication
-│   ├── app/                  # Flask application
-│   │   ├── __init__.py       # App initialization
-│   │   ├── routes.py         # API routes
-│   │   └── services/         # Business logic
-│   │       └── floor_plan_service.py # Core floor plan generation service
-│   ├── .env                  # Environment variables (API keys)
-│   ├── .env.example          # Example environment configuration
+│   ├── app/                  # Flask application code
 │   ├── main.py               # Main entry point
 │   ├── main_fixed.py         # Fixed main entry with direct env loading
 │   ├── requirements.txt      # Python dependencies
@@ -84,33 +94,44 @@ LLM-Floor-plan/
 
 ## Component Files & Interfaces
 
-### 1. Rhino/Grasshopper Interface (`grasshopper_components/`)
-- `text_to_json.py`: Processes text input and generates JSON using an LLM.
-- `json_to_graph.py`: Converts JSON to a graph structure.
-- `graph_to_floorplan.py`: Generates the detailed floor plan geometry in Rhino.
+### 1. Rhino/Grasshopper Integration
+- Allows referencing floor plan outlines from Rhino via screenshots
+- Users draw boundaries in the web interface based on these screenshots
+- Converts generated floor plans back to Rhino geometry
+- Components:
+  - `grasshopper_components/gh_convert.py`: Converts JSON layout data into Rhino geometry, including:
+    - Transforms hierarchical room structure into physical boundaries
+    - Creates layers based on room types
+    - Generates labeled visualizations with area calculations
+  - `gh/json_2_curve_update.gh`: Grasshopper definition that loads and processes the JSON output
 
 ### 2. React Frontend Interface (`frontend/`)
-- **Technology Stack:** React, tldraw SDK, Tailwind CSS, Vite.
-- **Functionality:**
-    - Provides a canvas (`BoundaryCanvas.jsx` using tldraw) for users to draw the initial site or building boundary.
-    - Includes a text area (`TextInput.jsx`) for natural language descriptions.
-    - Sends boundary data (e.g., coordinates of the polygon) and text description to the backend API service.
-    - Dynamically adjusts UI based on result state (hides example prompts after generation).
-- **Interaction:** Communicates with the backend Flask service via the `generateFloorPlan` function in `App.jsx`, which handles API requests to the `/api/generate-floor-plan` endpoint.
+- **Technology Stack:** React, tldraw SDK, Tailwind CSS, Vite
+- **Key Features:**
+    - Upload and reference floor plan screenshots from Rhino
+    - Draw boundaries using tldraw canvas
+    - Generate room layouts using LLM-powered text prompts
+    - Visualize and customize the generated floor plans
+    - Connect to Spatial OS for apartment object generation
+    - Export the floor plan back to Rhino/Grasshopper
 
 ### 3. Backend Server (`backend/`)
 - **Technology Stack:** Flask, Python, OpenRouter API
 - **Functionality:**
-    - Exposes API endpoints for generating floor plans
-    - Communicates with the LLM via OpenRouter API
-    - Processes boundary data and text descriptions
-    - Returns structured JSON floor plan data
-- **Configuration:** Uses environment variables loaded from a `.env` file for API keys
+    - Processes floor plan boundaries and text descriptions
+    - Communicates with LLM services via OpenRouter API
+    - Handles connection to Spatial OS web API
+    - Facilitates bidirectional communication with Grasshopper
+
+### 4. Spatial OS Integration
+- Connects the generated floor plans to Spatial OS's web API
+- Creates apartment objects for further processing
+- Enables advanced spatial operations beyond the initial 2D floor plan
 
 ## Setup Instructions
 
 ### Prerequisites
-*   **For Grasshopper:**
+*   **For Rhino/Grasshopper:**
     *   Rhino 8 or newer
     *   Grasshopper
 *   **For Frontend:**
@@ -120,11 +141,13 @@ LLM-Floor-plan/
     *   Python 3.7+
     *   pip
     *   Virtual environment (recommended)
+*   **For Spatial OS Integration:**
+    *   Spatial OS API key (obtain from Spatial OS website)
 
 ### Installation
 *   **Grasshopper:**
     1.  Navigate to the `grasshopper_components/` directory.
-    2.  Follow the setup instructions within that directory's README (or adapt the instructions below).
+    2.  Copy the Python scripts to your Grasshopper components as described in `example_setup.md`.
 *   **Frontend:**
     1.  Navigate to the `frontend/` directory.
     2.  Run `npm install` (or `yarn install`).
@@ -142,100 +165,70 @@ LLM-Floor-plan/
         ```bash
         pip install -r requirements.txt
         ```
-    4.  Copy `.env.example` to `.env` and add your OpenRouter API key:
+    4.  Create `.env` file with your API keys:
         ```
-        OPENROUTER_API_KEY=your-api-key-here
+        OPENROUTER_API_KEY=your-openrouter-api-key
+        SPATIAL_OS_API_KEY=your-spatial-os-api-key
         FLASK_ENV=development
         FLASK_APP=main
         ```
 
-### API Configuration
-The OpenRouter API key needs to be configured:
-*   **Grasshopper:** Currently embedded in `text_to_json.py` or via a `.env` file loaded by Python.
-*   **Backend:** Configure in the `.env` file in the `backend/` directory.
+## Usage Workflow
 
-## Environment Variables
-Create a `.env` file in the `backend/` directory:
-```
-OPENROUTER_API_KEY="your-api-key-here"
-FLASK_ENV=development
-FLASK_APP=main
-```
-Ensure `.env` is in `.gitignore`.
+### 1. Referencing Floor Plans from Rhino
+1. Open your floor plan in Rhino
+2. Take a screenshot of the floor plan boundary
+3. Save the screenshot for reference in the web interface
 
-## Usage
+### 2. Using the Web Interface
+1. Start the backend server:
+   ```bash
+   cd backend
+   python main_fixed.py
+   ```
 
-### 1. Grasshopper Interface
-*   Create three Python Script components in Grasshopper.
-*   Load the code from the `.py` files in the `grasshopper_components/` directory.
-*   Connect inputs/outputs as previously described (Text Input -> JSON -> Graph -> Floor Plan Geometry).
+2. Start the frontend development server:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
 
-### 2. React Frontend & Backend Interface
-1.  **Starting the Backend Server:**
-    ```bash
-    # Navigate to the backend directory
-    cd backend
-    
-    # Activate the virtual environment (if not already active)
-    # On Windows
-    venv\Scripts\activate
-    # On macOS/Linux
-    source venv/bin/activate
-    
-    # Start the Flask server
-    python main_fixed.py
-    ```
-    The server will start on `http://localhost:5000`.
+3. In the web interface:
+   - Upload the Rhino floor plan screenshot as reference
+   - Draw the boundary using the tldraw canvas
+   - Enter your room layout requirements in the text input
+   - Click "Generate Floor Plan" to process your input
+   - Customize the generated layout using the provided tools
+   - Connect to Spatial OS for apartment object generation (if configured)
+   - Export the floor plan back to Rhino/Grasshopper (if needed)
 
-2.  **Starting the Frontend Development Server:**
-    ```bash
-    # Navigate to the frontend directory
-    cd frontend
-    
-    # Install dependencies (if not done already)
-    npm install
-    
-    # Start the development server
-    npm run dev
-    ```
-    The application will automatically open in your default browser.
+### 3. Importing Generated Floor Plans Back to Rhino
+1. After generating a floor plan in the web interface, export the JSON layout file
+2. In Rhino, open the `gh/json_2_curve_update.gh` Grasshopper definition
+3. Set the file path to your exported JSON file
+4. Draw or select a boundary curve to define the overall dimensions
+5. Toggle the "Generate" parameter to create the Rhino geometry
+6. The script will:
+   - Create separate layers for each room type
+   - Generate room outlines with appropriate dimensions
+   - Add text labels showing room names and areas
 
-3.  **Using the Application:**
-    - Use the canvas to draw the desired boundary.
-    - Enter the floor plan description in the text area or select one of the example prompts.
-    - Click the "Generate Floor Plan" button to process your input.
-    - After generation, the example prompts will be hidden and the input area will be more compact.
-
-4.  **Building for Production:**
-    ```bash
-    # Create a production build
-    npm run build
-    
-    # Preview the production build locally
-    npm run preview
-    ```
-
-5.  **Troubleshooting Frontend Issues:**
-    - If you encounter connection issues, check that the backend server is running on port 5000.
-    - Check your browser's console (F12) for any errors.
-    - Verify the API URL in the frontend code is correctly pointing to your backend server.
-
-## Customization
-You can customize various aspects of the generated floor plans:
-- Edit the prompts in the LLM service to change floor plan generation parameters
-- Modify the example prompts in `frontend/src/components/TextInput.jsx`
-- Customize the UI behavior in `frontend/src/styles/App.css`
-- Adjust the API endpoints in `backend/app/routes.py`
+### 4. Spatial OS Integration
+1. Ensure your Spatial OS API key is configured in the `.env` file
+2. After generating a floor plan, click the "Generate Apartment" button
+3. The system will connect to Spatial OS and create an apartment object
+4. View and manipulate the apartment object in the web interface
+5. Export the apartment object for further processing if needed
 
 ## Troubleshooting
-- If the API call fails, verify that your OpenRouter API key is correctly set in the `.env` file.
+- If the API call fails, verify that your API keys are correctly set in the `.env` file.
+- For Rhino/Grasshopper integration issues, check the Rhino command line for error messages.
 - If the application cannot connect to the backend, ensure the Flask server is running on port 5000.
-- For API errors, check the Flask server logs for detailed error messages.
-- If you encounter OpenRouter API issues, try using the `direct_test.py` script in the backend directory to test the connection.
-- For frontend issues, check the browser's developer console (F12) for error messages.
+- For Spatial OS integration issues, check that your API key is valid and has the necessary permissions.
 
 ## Acknowledgments
 - Built using Rhino and Grasshopper
-- Uses OpenRouter to access Anthropic's Claude models for natural language processing
-- Utilizes Flask for the backend API service
-- Frontend utilizes React, tldraw, Vite, and Tailwind CSS
+- Uses OpenRouter to access Anthropic's Claude models for LLM processing
+- Utilizes tldraw for the drawing interface
+- Frontend built with React, Vite, and Tailwind CSS
+- Apartment object capabilities powered by Spatial OS
